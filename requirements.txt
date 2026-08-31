@@ -1,0 +1,6 @@
+# Runtime
+duckdb>=1.0
+PyYAML>=6.0
+
+# Tests
+pytest>=8.0
