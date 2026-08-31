@@ -42,6 +42,9 @@ Each claim on this page maps to one of three things:
 | Dimension coverage | state 10/15, mode 1/3, char 4/5 | `dimension_coverage` |
 | Full run, cold | 3 to 5 seconds | `./demo.sh` |
 | crow-archer tests | 1968 in 75 files | `npm test` |
+| PostgreSQL relations loaded | 12, holding 84 rows | `./demo.sh load` |
+| Full run with a warm container | 5 seconds | `./demo.sh` |
+| Cold container start, extra | about 9 seconds | Pre-warm before the call |
 
 ## Known gaps
 

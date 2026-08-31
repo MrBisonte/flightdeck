@@ -315,6 +315,9 @@ The load step tests the Docker daemon first.
 | Up | PostgreSQL, port 55432 | Normal output |
 | Down | Local target, same schema | A capitalised warning |
 
+The real load writes 12 relations and 84 rows into schema `curated`. Verified
+against PostgreSQL 17.
+
 A silent fallback would mislead an audience. Therefore the fallback announces
 itself.
 
