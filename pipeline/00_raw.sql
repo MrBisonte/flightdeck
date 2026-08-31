@@ -25,14 +25,25 @@ FROM (
             filename = true,
             maximum_object_size = 20000000
         )
-        -- Forward compatibility across wire format generations. The recorder
-        -- gained a per page client id (cid) after these sessions were recorded.
-        -- Unioning a zero-row template by name materializes the column as NULL
-        -- when the source predates it, and leaves it untouched when the source
-        -- carries it. The typed layer then handles both generations with one
-        -- coalesce instead of two code paths.
+        -- A stable schema, whatever the source happened to contain.
+        --
+        -- Two problems, one fix. A log with no alarm and no error carries no
+        -- class, blockers, trace, msg or stack column at all, and the typed
+        -- layer would fail to bind against a perfectly healthy session. And a
+        -- log recorded before the recorder minted a per page client id has no
+        -- cid column.
+        --
+        -- contracts/wire_schema.jsonl holds one fully populated record of every
+        -- kind. Reading zero rows from it and unioning by name materializes
+        -- every documented column, typed, whether or not this particular source
+        -- exercised it. Columns the source does carry are untouched, and a
+        -- field the schema does not know about is still admitted, because
+        -- union_by_name adds it rather than dropping it.
         UNION ALL BY NAME
-        SELECT NULL::VARCHAR AS cid, NULL::VARCHAR AS filename WHERE false
+        SELECT *, NULL::VARCHAR AS filename
+        FROM read_json('contracts/wire_schema.jsonl',
+                       format = 'newline_delimited', union_by_name = true)
+        WHERE false
      );
 
 COPY (
