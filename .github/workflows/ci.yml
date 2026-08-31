@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Install DuckDB CLI
+        run: |
+          curl -sSL https://install.duckdb.org | sh
+          echo "$HOME/.duckdb/cli/latest" >> "$GITHUB_PATH"
+
+      - name: Tests
+        run: python -m pytest tests/ -q
+
+      - name: Credential scan
+        run: bash scripts/scan_secrets.sh
+
+      - name: Fixtures are sanitized
+        run: python scripts/sanitize_flightlog.py --check fixtures/raw
+
+      - name: Pipeline runs end to end
+        run: ./demo.sh build
+
+      - name: Contract reconciles
+        run: |
+          duckdb warehouse/flightdeck.duckdb -c "
+            SELECT CASE WHEN reconciles THEN 'ok' ELSE 'FAIL' END AS status,
+                   landed_records, clean_records, quarantined_records
+            FROM contract_reconciliation;"
+          duckdb warehouse/flightdeck.duckdb -noheader -list -c \
+            "SELECT reconciles FROM contract_reconciliation;" | grep -qx true
