@@ -1,59 +1,72 @@
-# What was changed in these fixtures, and what was not
+# What changed in these fixtures
 
-The three files in `raw/` are real recorded play sessions from the crow-archer
-flight recorder, captured on 2026-08-30. They are not generated and not edited
-by hand. Exactly two fields were rewritten, by
-[`scripts/sanitize_flightlog.py`](../scripts/sanitize_flightlog.py), which is
-deterministic and re-runnable.
+The three files in `raw/` hold real recorded play from 2026-08-30. Nobody
+generated them. Nobody edited them by hand.
 
-## The two changes
+The sanitizer rewrites two fields and nothing else. See
+[`scripts/sanitize_flightlog.py`](../scripts/sanitize_flightlog.py). It runs the
+same way every time.
 
-| Field | Before | After | Why |
+```
+   original log  -->  sanitizer  -->  committed fixture
+                        |
+                        +-- rewrites: ua, href, URLs in stack
+                        +-- keeps:    every other field, byte for byte
+```
+
+## The changes
+
+| Field | Before | After | Reason |
 |---|---|---|---|
-| `ua` | Full user agent, naming the browser build | `Chrome` or `Edge` | The build string identifies the exact client. Browser family is all the analysis needs |
-| `href` | `http://localhost:8090/` | `http://localhost/` | Normalizes the dev server origin |
-| URLs inside `stack` | `http://localhost:8090/src/...` | `http://localhost/src/...` | Same rule applied consistently |
+| `ua` | The full user agent, with the build | `Chrome` or `Edge` | The build string identifies the exact client |
+| `href` | `http://localhost:8090/` | `http://localhost/` | Removes the dev server port |
+| URLs in `stack` | `http://localhost:8090/src/...` | `http://localhost/src/...` | The same rule, applied consistently |
 
-Nothing else was touched. Timestamps, telemetry, event bodies, stack frames,
-file names, line numbers and column numbers are byte for byte as recorded.
+## What the sanitizer keeps
 
-**File paths, line numbers and column numbers in stack traces are preserved on
-purpose.** They are the evidence. `pathfinding.ts:67:30` still reads
-`pathfinding.ts:67:30`.
+The sanitizer keeps timestamps, telemetry, event bodies, and stack frames.
 
-## What was checked and found absent
+It also keeps file names, line numbers, and column numbers. **Those are the
+evidence.** `pathfinding.ts:67:30` still reads `pathfinding.ts:67:30`.
 
-The sanitizer fails if any of these survive into the output, and it was run as a
-gate, not an afterthought:
+## What the sanitizer checks
 
-| Shape | Found |
+The script fails when any of these shapes survive into the output. It runs as a
+gate, not as an afterthought.
+
+| Shape | Result |
 |---|---|
-| Windows drive paths, `C:\...` | none |
-| Unix home paths, `/Users/`, `/home/` | none |
-| Cloud sync folder names, always under one of the above | none |
-| In-app browser build tokens | removed with the user agent |
-| Un-trimmed user agents | none remaining |
+| Windows drive path, `C:\...` | none found |
+| Unix home path, `/Users/`, `/home/` | none found |
+| A cloud folder name, always under one of the above | none found |
+| A browser build token | removed with the user agent |
+| An untrimmed user agent | none remain |
 
-Verify it yourself against the committed fixtures:
+Check the committed fixtures yourself:
 
 ```bash
 python scripts/sanitize_flightlog.py --check fixtures/raw
 ```
 
-## Record counts, before and after
+## Record counts
 
-Sanitizing changes field values, never record counts.
+The sanitizer changes field values. It never changes record counts.
 
-| File | Records | Contains |
+| File | Records | Contents |
 |---|---|---|
-| `session-2026-08-30T14-58-28-391Z.jsonl` | 282 | 1 alarm, 1 err (a recorder self-test) |
+| `session-2026-08-30T14-58-28-391Z.jsonl` | 282 | 1 alarm, 1 err (a self-test) |
 | `session-2026-08-30T15-04-51-872Z.jsonl` | 640 | 3 alarms, 1 err (a real crash) |
-| `session-2026-08-30T15-39-43-490Z.jsonl` | 338 | clean session, no alarm, no err |
+| `session-2026-08-30T15-39-43-490Z.jsonl` | 338 | clean, no alarm, no err |
 | **Total** | **1260** | |
 
-## An honest note on the two err records
+## A note on the two error records
 
-Only one of the two `err` records is a real defect. The other, in the first
-session, is `flight-recorder self-test`, deliberately thrown to prove the error
-hook worked. It is left in because removing it would misrepresent what the
-session contained.
+Only one error record shows a real defect.
+
+| Record | Message | Type |
+|---|---|---|
+| Session B | `Uncaught TypeError ... reading 'length'` | A real crash |
+| Session A | `Uncaught Error: flight-recorder self-test` | A deliberate test |
+
+The self-test proves the error hook works. It stays in the fixture. Removal
+would misrepresent the session.

@@ -1,21 +1,31 @@
 # flightdeck
 
-A medallion pipeline over real browser game telemetry. JSONL flight logs to Hive
-partitioned Parquet, to a typed relational model enforced by a data contract, to
-curated analytics, to PostgreSQL and a PostHog event stream.
+A medallion pipeline over real browser game telemetry.
+
+```
+   JSONL  -->  Parquet  -->  typed model  -->  curated views  -->  PostgreSQL
+   raw log     partitioned   under a         analytics           and PostHog
+                             contract
+```
 
 The telemetry comes from the flight recorder in
 [crow-archer](https://github.com/MrBisonte/crow-archer). The three sessions in
-`fixtures/raw/` are real recorded play, 1260 records, not generated. Two of them
-carry alarms and an uncaught error, one is clean.
+`fixtures/raw/` hold 1260 records of real play. Two sessions contain alarms and
+an uncaught error. One session is clean.
 
-Read [docs/architecture.md](docs/architecture.md) for how the whole thing fits
-together, including the diagrams.
+Read [docs/architecture.md](docs/architecture.md) for the full picture.
 
 ## Quickstart
 
-You need `duckdb` on PATH, Python 3.9 or newer, and a bash shell. Docker is
-optional, the load step degrades without it and says so.
+You need three things:
+
+| Tool | Version |
+|---|---|
+| `duckdb` on PATH | 1.0 or newer |
+| Python | 3.9 or newer |
+| A bash shell | any |
+
+Docker is optional. The load step works without it.
 
 ```bash
 git clone https://github.com/MrBisonte/flightdeck && cd flightdeck
@@ -25,60 +35,67 @@ git clone https://github.com/MrBisonte/flightdeck && cd flightdeck
 pip install -r requirements.txt && ./demo.sh
 ```
 
-That runs every step on the committed fixtures and prints the answers. It takes
-about 3 seconds from cold.
+That command runs every step and prints the answers. It takes 3 to 5 seconds
+from cold.
 
-To run one step at a time:
+Run one step at a time with a step name:
 
 ```bash
-./demo.sh build
+./demo.sh curated
 ```
 
-Steps are `check`, `raw`, `typed`, `curated`, `publish`, `load`, `posthog`.
+Steps: `check`, `raw`, `typed`, `curated`, `publish`, `load`, `posthog`.
+
+## The idea
+
+A page can report the wrong time. A page cannot change when its data arrived.
+
+```
+   wall, perf, timestamp  -->  written by the page   -->  claims
+   srv                    -->  written by the server -->  fact
+```
+
+The pipeline partitions and orders on `srv`. It treats the other three clocks as
+claims to check.
+
+That one decision separates a page that went quiet from a page that was wrong.
+It is how the pipeline sorts 20 background-tab stalls from the 1 stall that
+throttling does not explain.
 
 ## What it answers
 
 | View | Question |
 |---|---|
-| `session_summary` | What happened in each page load, and how did it end |
-| `clock_skew` | Does the clock the page reports agree with the one the server stamped |
-| `gap_explained` | When did the page go quiet, and was throttling the reason |
-| `frame_time_by_span` | p50 and p95 per frame section, over 3978 measurements |
-| `loss_accounting` | How much telemetry was lost, proven rather than assumed |
-| `dimension_coverage` | Which documented states, modes and characters were never played |
-| `quarantine` | Every row that failed the contract, with the reason |
-
-## The idea in one paragraph
-
-A page can lie about the time. It cannot lie about when its data arrived. Every
-record carries a server stamped `srv` alongside the three clocks the page writes
-itself, so the pipeline partitions and orders on `srv` and treats the rest as
-claims to check. That single decision is what lets it tell a page that went quiet
-from a page that was merely wrong, and it is how the 20 background tab stalls in
-this data get separated from the one stall that throttling does not explain.
+| `session_summary` | What happened in each page load? How did it end? |
+| `clock_skew` | Does the page clock agree with the server clock? |
+| `gap_explained` | When did the page stop? Why? |
+| `incident_timeline` | How long after a crash did the watchdog notice? |
+| `frame_time_by_span` | What is p50 and p95 per frame section? |
+| `loss_accounting` | How much telemetry did the system lose? |
+| `dimension_coverage` | Which documented values did nobody play? |
+| `quarantine` | Which records failed the contract, and why? |
 
 ## Layout
 
-| Path | What |
+| Path | Content |
 |---|---|
 | `contracts/flight_log.yml` | The data contract: enums, caps, required fields |
-| `fixtures/raw/` | Three real sessions, sanitized. See `fixtures/SANITIZATION.md` |
+| `contracts/wire_schema.jsonl` | One record of each kind. Fixes the column set |
+| `fixtures/raw/` | Three real sessions, sanitized |
 | `fixtures/reference/` | The documented domain, as CSV. The second source |
-| `pipeline/` | `00_raw` `10_typed` `20_curated` `25_publish` `30_load_postgres` `40_posthog_export` |
-| `scripts/` | The sanitizer and a generic credential scan |
+| `pipeline/` | The six pipeline steps, in order |
+| `scripts/` | The sanitizer, a credential scan, an STE doc check |
 | `docs/architecture.md` | End to end, data flows, topology |
-| `demo.sh` | All of it, one command |
+| `demo.sh` | Every step, one command |
 
-## Notes
+## Three rules this repository follows
 
-- **Nothing is dropped.** Rows that fail the contract go to `quarantine` with a
-  reason, and `contract_reconciliation` proves clean plus quarantined equals
-  landed.
-- **The PostHog exporter makes no network calls.** It prints the batch it would
-  send and exits. It reads no API key.
-- **Snowflake is a documented path, not a live step.** The curated Parquet is
-  what a `COPY INTO` would read, and the demo has no external dependencies.
+| Rule | Result |
+|---|---|
+| **Drop nothing** | A bad record moves to `quarantine` with a reason. The counts reconcile |
+| **Make no network calls** | The PostHog exporter prints its batch and exits. It reads no key |
+| **Claim only what runs** | Snowflake stays a documented path. The demo needs no external service |
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

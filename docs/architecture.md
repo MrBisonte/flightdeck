@@ -1,271 +1,365 @@
-# How this works, end to end
+# How the system works
 
-A browser game records what it is doing. A pipeline turns that recording into
-tables you can ask questions of. This page explains the whole path, from a key
-press in a game to a row in PostgreSQL.
+This page explains the system from end to end. It shows the topology, the data
+flows, and the process.
 
-Read this first, then the code. Nothing here is aspirational, every step below
-runs today with `./demo.sh`.
+Every step on this page runs today. Use `./demo.sh` to run all of them.
 
-## The short version
+## Words used on this page
 
-| Stage | What goes in | What comes out | Where |
-|---|---|---|---|
-| Record | A game being played | One JSON object per second | crow-archer, in the browser |
-| Land | JSONL text | Hive partitioned Parquet | `pipeline/00_raw.sql` |
-| Type | Parquet, one wide row per record | Eight relations, plus quarantine | `pipeline/10_typed.sql` |
-| Curate | Eight relations | Ten answers | `pipeline/20_curated.sql` |
-| Publish | Ten answers | Ten Parquet files | `pipeline/25_publish.sql` |
-| Load | Ten Parquet files | PostgreSQL tables | `pipeline/30_load_postgres.py` |
-| Preview | The same ten files | A PostHog event batch, dry run | `pipeline/40_posthog_export.py` |
+One word has one meaning. This table fixes each meaning.
 
-Total run time on the committed fixtures: about 3 seconds, cold.
+| Word | Meaning |
+|---|---|
+| **record** | One JSON object. One line in a log file |
+| **page load** | One browser page, from open to close |
+| **session file** | One file the sink writes. One file per dev server run |
+| **layer** | One stage of the pipeline: raw, typed, or curated |
+| **relation** | One table or one view |
+| **clock** | One source of time. The system has four |
 
-## The whole topology
+## The system in one picture
 
 ```mermaid
 flowchart TB
-  subgraph browser["Browser, development build only"]
-    game["game loop<br/>src/legacy/game.js"]
-    ring["log ring<br/>500 entries<br/>src/sim/log.ts"]
-    rec["flight recorder<br/>src/dev/flight-recorder.ts"]
-    game -->|"every state change,<br/>every event, every frame trace"| ring
-    ring -->|"drained by watermark,<br/>at most 400 per beat"| rec
-    game -->|"pulse(), polled once a second"| rec
+  subgraph A["1. BROWSER, dev build only"]
+    game["game loop"]
+    ring["log ring<br/>500 entries"]
+    rec["flight recorder"]
+    game --> ring --> rec
+    game -->|"pulse, 1 per second"| rec
   end
 
-  subgraph server["Vite dev server"]
-    sink["flight sink<br/>src/dev/flight-sink.ts"]
-    log[("_flightlogs/session-*.jsonl<br/>one line per record")]
-    sink -->|"append, after stamping srv"| log
+  subgraph B["2. DEV SERVER"]
+    sink["flight sink"]
+    log[("session file<br/>one JSON object per line")]
+    sink -->|"add srv, then append"| log
   end
 
-  rec -->|"POST /__flight<br/>beat once a second"| sink
-  rec -.->|"sendBeacon, survives page unload<br/>alarm, err, bye"| sink
-
-  subgraph pipe["flightdeck, this repository"]
-    san["sanitizer<br/>scripts/sanitize_flightlog.py"]
-    raw[("raw<br/>Hive partitioned Parquet")]
-    typed[("typed<br/>8 relations + quarantine")]
-    cur[("curated<br/>10 Parquet files")]
-    san --> raw --> typed --> cur
+  subgraph C["3. PIPELINE, this repository"]
+    raw[("RAW<br/>Parquet, partitioned")]
+    typed[("TYPED<br/>8 relations + quarantine")]
+    cur[("CURATED<br/>11 views")]
+    raw --> typed --> cur
   end
 
-  log --> san
-  refs[("reference dimensions<br/>fixtures/reference/*.csv")] --> typed
+  subgraph D["4. CONSUMERS"]
+    pg[("PostgreSQL")]
+    ph["PostHog<br/>dry run"]
+  end
 
-  cur --> pg[("PostgreSQL<br/>schema curated")]
-  cur --> ph["PostHog exporter<br/>dry run"]
+  rec -->|"beat: fetch"| sink
+  rec -.->|"alarm, err, bye: sendBeacon"| sink
+  log --> raw
+  ref[("reference CSV")] --> typed
+  cur --> pg
+  cur --> ph
 ```
 
-The dotted arrow matters. Beats go out with `fetch`, but an alarm, an uncaught
-error and the goodbye go out with `sendBeacon`, which the browser finishes even
-while the page is being torn down. Without it, the most interesting record in
-any session, the one written as everything falls over, would be the one you
-never receive.
+Read the dotted arrow carefully. It is important.
 
-## The four parts, and who owns what
+- A beat uses `fetch`.
+- An alarm, an error, and a goodbye use `sendBeacon`.
+- The browser completes a `sendBeacon` call during page unload.
+- Therefore the system receives the last record, written as the page dies.
 
-| Part | Lives in | Owns |
+## Who owns what
+
+Each stage has one owner. Data moves in one direction only.
+
+```
+   RECORD  --->  STAMP  --->  STRUCTURE  --->  READ
+  recorder       sink          pipeline       consumers
+```
+
+| Stage | Owner | Responsibility |
 |---|---|---|
-| Recorder | crow-archer, browser | Deciding what is worth sending, and when |
-| Sink | crow-archer, dev server | Stamping arrival time, appending the file. The only writer |
-| Pipeline | flightdeck, this repo | Structure, contract, answers |
-| Consumers | PostgreSQL, PostHog | Reading. Never writing back |
+| Record | Recorder, in the browser | Choose what to send. Choose when |
+| Stamp | Sink, in the dev server | Add the arrival time. Append the file |
+| Structure | Pipeline, this repository | Type the data. Apply the contract |
+| Read | PostgreSQL, PostHog | Read only. Never write back |
 
-One writer per stage, in one direction. Nothing downstream can change what was
-recorded, which is what makes the log worth trusting.
+The sink is the only writer of a session file. No consumer writes back.
+Therefore no stage can change what the recorder captured.
 
 ## The four clocks
 
-This is the idea the whole design rests on, so it is worth being slow about.
+This idea carries the whole design. Read this section slowly.
 
-Every record carries up to four different notions of time:
+Each record holds up to four clocks.
 
-| Clock | Written by | Trustworthy? |
+| Clock | Written by | Trust it? |
 |---|---|---|
-| `wall` | The page | No. A sleeping or throttled tab reports whatever it believes |
-| `perf` | The page | No. Monotonic, but only relative to that page load |
-| `timestamp` on each event | The page | No. Same reason |
-| `srv` | The server, on arrival | **Yes.** The page cannot influence it |
+| `wall` | The page | **No.** A slow page reports a wrong time |
+| `perf` | The page | **No.** It counts from that page load only |
+| `timestamp` | The page | **No.** Same reason |
+| `srv` | The server | **YES.** The page cannot change it |
 
-So the pipeline partitions and orders on `srv`, and treats the other three as
-things to compare against it rather than as facts.
+The pipeline partitions on `srv`. The pipeline orders on `srv`. The pipeline
+compares the other three clocks against `srv`.
 
 ```
-   page says:  "it is now 14:58:31"          --.
-                                                >-- compare these two
-   server saw it arrive at:  14:58:31.009    --'
+    page says     "the time is 14:58:31.194"
+                            |
+                            |  compare
+                            v
+    server saw    "it arrived at 14:58:31.203"     difference = 9 ms
 ```
 
-Two questions fall out of that comparison, and both are answered in
-`pipeline/20_curated.sql`:
+### Question 1: do the clocks agree?
 
-1. **Do the clocks agree?** Across 1259 records, `srv - wall` runs from 0 to 9
-   milliseconds, mean 0.92. They agree. Now that is measured rather than assumed.
-2. **When did the page go quiet, and why?** Consecutive `srv` values with a gap
-   bigger than three beats. Joining each gap to the tab visibility at the time
-   explains most of them, and leaves one that it cannot.
+| Measure | Value |
+|---|---|
+| Records compared | 1259 |
+| Smallest difference | 0 ms |
+| Largest difference | 9 ms |
+| Mean difference | 0.92 ms |
 
-| Explanation | Gaps | Longest |
+The clocks agree. The pipeline now measures this fact. It does not assume it.
+
+### Question 2: when did the page stop, and why?
+
+A gap is a pause longer than three beats between two `srv` values. The pipeline
+joins each gap to the tab visibility at that moment.
+
+| Cause | Gaps | Longest |
 |---|---|---|
-| Background tab, browser clamped the 1 second timer | 20 | 60.0s |
-| Tab hidden, machine asleep | 4 | 17364.8s |
-| Visible throughout, not explained by throttling | 1 | 472.2s |
+| Background tab. The browser slowed the timer | 20 | 60.0s |
+| Tab hidden. The machine slept | 4 | 17364.8s |
+| **Tab visible. Throttling does not explain it** | **1** | **472.2s** |
 
-Twenty gaps of almost exactly 60 seconds, every one of them while the tab was
-hidden, is a browser doing exactly what browsers do. The single 472 second gap
-while the tab was visible is not that, and it is the only one worth anybody's
-afternoon.
+Read the result this way:
 
-## A session file is not a session
+```
+   20 gaps of ~60s while hidden   ->  normal browser behaviour
+    4 long gaps while hidden      ->  the machine slept
+    1 gap of 472s while VISIBLE   ->  investigate this one
+```
 
-The sink writes one file per dev server run. Every page load during that run
-appends to the same file. The three fixture files hold **16** page loads between
-them, and event ids restart at 1 on each one.
+## A session file is not a page load
+
+The sink creates one file per dev server run. Every page load appends to that
+same file.
 
 ```mermaid
 flowchart LR
-  f[("session-....jsonl<br/>one dev server run")]
+  f[("one session file")]
   f --> p1["page load 1<br/>hello ... bye"]
   f --> p2["page load 2<br/>hello ... bye"]
   f --> p3["page load 3<br/>hello ... no bye"]
 ```
 
-So the file name keys nothing. The pipeline builds the real key two ways:
+The three fixture files hold **16** page loads. Log event ids restart at 1 on
+each page load. Therefore the file name identifies nothing useful.
 
-- If the record carries `cid`, a per page client id minted by the recorder, use it.
-- Otherwise, count `hello` records seen so far in the file. That is `page_load_seq`.
+The pipeline builds the real key in two ways:
 
-The committed fixtures predate `cid`, which is why both paths exist and both are
-exercised. The raw layer unions a zero row template by name so the `cid` column
-is present either way, and the typed layer picks with one `coalesce` rather than
-branching into two code paths.
+| Wire format | Key source | Field `has_native_client_id` |
+|---|---|---|
+| New | `cid`, minted by the recorder | `true` |
+| Old | Count of `hello` records in the file | `false` |
 
-This is also where the pipeline found something real. One fixture file opens
-with a `bye`, because a page was still open when the dev server restarted, and
-its goodbye landed in a file that never saw its hello. That record is an orphan
-under the contract and goes to quarantine.
+The fixtures use the old format. Live captures use the new format. The pipeline
+reads both. `tests/test_schema_evolution.py` proves this.
 
-## The contract, and what happens to a bad row
-
-The contract is `contracts/flight_log.yml`: which fields each record kind must
-carry, which values each enum allows, and the size caps the recorder enforces.
-Its enum members are also committed as CSV reference dimensions, and the caps
-are a table in the warehouse, so the contract is queryable rather than buried in
-code. A test asserts the copies never drift apart.
+## What happens to a bad record
 
 ```mermaid
 flowchart LR
-  landed[("landed<br/>1260 records")] --> check{"meets the<br/>contract?"}
+  landed[("landed<br/>1260")] --> check{"meets the<br/>contract?"}
   check -->|yes| clean[("clean<br/>1259")]
-  check -->|"no, with a reason"| quar[("quarantine<br/>1")]
-  clean --> rel["the 8 relations"]
-  quar --> rel2["shipped with the curated layer"]
+  check -->|"no + reason"| quar[("quarantine<br/>1")]
+  clean --> out["8 relations"]
+  quar --> out2["shipped with<br/>the curated layer"]
 ```
 
-**Nothing is dropped.** A row that fails goes to `quarantine` carrying the reason
-it failed, and the counts are made to reconcile in public:
+The pipeline drops nothing. A bad record moves to `quarantine`. Each quarantine
+row carries the reason.
+
+The counts must reconcile:
 
 ```
-clean 1259  +  quarantined 1  =  landed 1260      reconciles: true
+   clean 1259  +  quarantined 1  =  landed 1260      reconciles = true
 ```
 
-Quarantine ships alongside the curated data on purpose. A consumer that can read
-the clean rows but cannot see what was held back has no way to judge how complete
-its answer is.
+CI fails the build when this equation breaks.
 
-## Where the frame timings come from
+Quarantine ships with the curated data. A consumer must see what the pipeline
+held back. Otherwise the consumer cannot judge the answer.
 
-Two places, and the difference matters.
+### The one real quarantine row
 
-| Origin | Rows | Shape | Good for |
+| Field | Value |
+|---|---|
+| Reason | `orphan_record_no_hello` |
+| Record | A `bye` |
+| Cause | The page outlived the dev server |
+
+The dev server restarted. The sink opened a new file. The old page then sent its
+goodbye into that new file. The new file never saw the matching `hello`.
+
+## Where the frame times come from
+
+Two sources supply frame times. The difference matters.
+
+| Source | Rows | Shape | Use |
 |---|---|---|---|
-| `alarm.trace.spans` | 24 | Already typed | Reading directly |
-| Trace summary in the beat drain | 3978 | Formatted text | Percentiles |
+| `alarm.trace.spans` | 24 | Typed already | Read directly |
+| Trace summary in a beat | 3978 | Text | Percentiles |
 
-Alarms carry a clean typed struct, but there are four alarms in the entire
-fixture set, and a p95 over four samples is not a p95. The recorder also writes a
-trace summary into the log ring about once a second, and that survives in the
-beat drain as a line of text:
+The fixture set holds four alarms. Four samples cannot support a p95.
+
+The recorder also writes a trace summary to the log ring once per second. That
+summary reaches the pipeline as text:
 
 ```
 sim        0.05ms   max 0.70     0 fill    0 img   0.00Mpx
 ```
 
-Parsing those gives 663 summaries, six sections each, 3978 measurements. The
-percentiles come from those, and the sample count is printed next to them so
-nobody has to take the number on faith.
+The pipeline parses these lines.
+
+```
+   663 summaries  x  6 sections  =  3978 measurements
+```
+
+The percentile views print the sample count beside each number.
 
 ## Loss accounting
 
-The recorder drains a 500 entry ring by watermark and caps each beat at 400
-events. If it ever has to discard, it says so. Two independent checks:
+The recorder protects itself in three ways.
 
-1. The counter the recorder itself reports.
-2. Gaps in the event id sequence. Ids are assigned at the source and are
-   contiguous within a page load, so a missing id is a lost event and the
-   recorder cannot hide it.
+| Guard | Limit |
+|---|---|
+| Log ring capacity | 500 entries |
+| Events per beat | 400 |
+| Events on goodbye | 100 |
 
-Result on the fixtures: **0 lost of 2079 events**, with a peak of 32 events in a
-single beat against a cap of 400, which is 8 percent of the headroom. The ring
-never came close to overflowing. That is the honest finding, and the mechanism
-is what makes the finding checkable.
+The pipeline checks for loss in two independent ways.
+
+1. Read the `dropped` counter that the recorder reports.
+2. Find gaps in the event id sequence.
+
+The second check is the stronger one. The source assigns each event id. The ids
+run without gaps inside one page load. Therefore a missing id proves a loss.
+
+| Measure | Value |
+|---|---|
+| Events received | 2079 |
+| Events lost | **0** |
+| Peak events in one beat | 32 |
+| Cap | 400 |
+| Headroom used | 8% |
+
+The ring never came close to its limit. This is the honest result. The mechanism
+makes the result checkable.
 
 ## One curated layer, two consumers
 
 ```
-   curated Parquet ---> PostgreSQL, relational tables
-                   \
-                    -> PostHog, an event stream
+                        +--> PostgreSQL, relational tables
+   curated Parquet  ----+
+                        +--> PostHog, an event stream
 ```
 
-Both read the same files. Neither reads the DuckDB database, and neither reads
-the raw log. Adding a third consumer means adding a reader, not another pipeline.
+Both consumers read the same Parquet files. Neither reads the DuckDB database.
+Neither reads the raw log. A third consumer needs a reader only.
 
-## Lineage, one raw file to one Postgres table
+## Lineage: one log file to one database table
 
 ```mermaid
 flowchart LR
-  jsonl[("session-*.jsonl")] -->|sanitize| fix[("fixtures/raw/*.jsonl")]
-  fix -->|"00_raw.sql"| rawp[("warehouse/raw/<br/>session_date=/session_id=")]
-  refs[("fixtures/reference/*.csv")] --> typed
-  rawp -->|"10_typed.sql"| typed[("sessions, beats, pulses, events,<br/>alarms, blockers, errors, spans")]
-  typed -->|"20_curated.sql"| curated["session_summary, frame_time_by_span,<br/>clock_skew, gap_explained, loss_accounting,<br/>dimension_coverage, ..."]
-  curated -->|"25_publish.sql"| cparq[("warehouse/curated/*.parquet")]
-  cparq -->|"30_load_postgres.py"| pg[("postgres<br/>curated.session_summary")]
-  cparq -->|"40_posthog_export.py"| ph["PostHog batch<br/>dry run"]
+  jsonl[("session file")] -->|sanitize| fix[("fixtures/raw")]
+  fix -->|00_raw| rawp[("warehouse/raw<br/>session_date / session_id")]
+  ref[("fixtures/reference")] --> typed
+  rawp -->|10_typed| typed[("sessions, beats, pulses,<br/>events, alarms, blockers,<br/>errors, spans")]
+  typed -->|20_curated| cur["11 views"]
+  cur -->|25_publish| cparq[("warehouse/curated")]
+  cparq -->|30_load_postgres| pg[("postgres<br/>curated.*")]
+  cparq -->|40_posthog_export| ph["PostHog batch"]
 ```
 
-## Running it
+## The process, step by step
 
-| Command | Does |
-|---|---|
-| `./demo.sh` | Everything, timed |
-| `./demo.sh build` | Raw, typed, curated, publish. No load, no exporter |
-| `./demo.sh curated` | One step |
-| `./demo.sh --live _flightlogs` | Read a live capture instead, newest file wins |
+| Step | Command | Time |
+|---|---|---|
+| 1 | `./demo.sh check` | Verify the fixtures. Run the tests |
+| 2 | `./demo.sh raw` | Land the Parquet |
+| 3 | `./demo.sh typed` | Apply the contract |
+| 4 | `./demo.sh curated` | Build the views |
+| 5 | `./demo.sh publish` | Write the curated Parquet |
+| 6 | `./demo.sh load` | Load PostgreSQL |
+| 7 | `./demo.sh posthog` | Print the PostHog batch |
 
-Live play falls back to the fixtures by omitting `--live`. There is no live only
-state to unwind, which is the whole kill switch.
+Use `./demo.sh` to run all seven steps. The full run takes 3 to 5 seconds.
 
-If the Docker daemon is not running, the load step degrades to a local target
-with the same schema and announces it in capitals. A silent fallback during a
-live demo would be worse than a failure.
+Use `./demo.sh build` to run steps 1 to 5 only.
 
-## What the fixtures actually contain
+## The two safety behaviours
 
-| | Records | beat | hello | bye | alarm | err |
+### Live capture
+
+```
+   ./demo.sh --live DIR    reads DIR, newest file wins
+   ./demo.sh               reads the fixtures
+```
+
+Remove the flag to return to the fixtures. The live path creates no extra state.
+Therefore nothing needs a reset.
+
+### Docker is down
+
+The load step tests the Docker daemon first.
+
+| Daemon | Target | Message |
+|---|---|---|
+| Up | PostgreSQL, port 55432 | Normal output |
+| Down | Local target, same schema | A capitalised warning |
+
+A silent fallback would mislead an audience. Therefore the fallback announces
+itself.
+
+## What the fixtures hold
+
+| Session | Records | beat | hello | bye | alarm | err |
 |---|---|---|---|---|---|---|
-| Session A | 282 | 269 | 6 | 5 | 1 | 1 |
-| Session B | 640 | 626 | 6 | 4 | 3 | 1 |
-| Session C | 338 | 331 | 4 | 3 | 0 | 0 |
+| A | 282 | 269 | 6 | 5 | 1 | 1 |
+| B | 640 | 626 | 6 | 4 | 3 | 1 |
+| C | 338 | 331 | 4 | 3 | 0 | 0 |
 | **Total** | **1260** | **1226** | **16** | **12** | **4** | **2** |
 
-Two of the four alarms are `loop-dead`, one `logic-freeze`, one `no-frames`. One
-of the two errors is a real crash, `PathScheduler.invalidateThrough` at
-`pathfinding.ts:67:30`. The other is a deliberate self-test, left in because
-removing it would misrepresent the session.
+Alarm classes: 2 `loop-dead`, 1 `logic-freeze`, 1 `no-frames`.
 
-See [fixtures/SANITIZATION.md](../fixtures/SANITIZATION.md) for exactly which two
-fields were rewritten before these were committed, and what was checked.
+The two error records differ:
+
+| Error | Type |
+|---|---|
+| `Uncaught TypeError ... reading 'length'` | A real crash |
+| `Uncaught Error: flight-recorder self-test` | A deliberate test |
+
+The self-test record stays in the fixture. Removal would misrepresent the
+session.
+
+### The crash, as the data shows it
+
+```
+   17:14:01.594   err     Uncaught TypeError, PathScheduler.invalidateThrough
+                            |
+                            |  1.323 seconds
+                            v
+   17:14:02.917   alarm   loop-dead
+```
+
+Two different code paths wrote those two records. The exception stopped the
+frame loop. The watchdog then raised the alarm. The interval is the time to
+detection.
+
+Use the `incident_timeline` view to see this.
+
+## Related pages
+
+| Page | Content |
+|---|---|
+| [SANITIZATION.md](../fixtures/SANITIZATION.md) | The two fields changed before commit |
+| [reference/README.md](../fixtures/reference/README.md) | The second data source |
+| [evidence-matrix.md](evidence-matrix.md) | Claims, evidence, and known gaps |
+| [flight_log.yml](../contracts/flight_log.yml) | The contract itself |
