@@ -1,0 +1,19 @@
+# PostgreSQL target for the load step.
+#
+# Port 55432 on purpose. The default 5432 is often already taken by a local
+# install, and a demo that dies on a port clash is a demo that dies.
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: flightdeck-pg
+    environment:
+      POSTGRES_USER: flightdeck
+      POSTGRES_PASSWORD: flightdeck
+      POSTGRES_DB: flightdeck
+    ports:
+      - "55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flightdeck -d flightdeck"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
