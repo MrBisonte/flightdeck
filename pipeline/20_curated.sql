@@ -205,3 +205,31 @@ SELECT s.client_id,
          WHERE e.session_id = s.session_id AND e.page_load_seq = s.page_load_seq) AS error_messages
 FROM session_summary s
 ORDER BY s.alarms + s.errors DESC, s.duration_s DESC;
+
+--------------------------------------------------------------------------------
+-- Incident timeline.
+--
+-- An uncaught exception and a watchdog alarm are two different record kinds
+-- written by two different code paths, so on their own they read as unrelated
+-- events. Ordering them on the server clock shows the causal chain: the
+-- exception unhooks the frame loop, and the watchdog notices a moment later.
+-- That gap, error to alarm, is the recorder's time to detection.
+--------------------------------------------------------------------------------
+CREATE OR REPLACE VIEW incident_timeline AS
+WITH incidents AS (
+    SELECT session_id, page_load_seq, srv, 'error' AS event,
+           msg AS detail
+    FROM clean WHERE kind = 'err'
+    UNION ALL
+    SELECT session_id, page_load_seq, srv, 'alarm', 'class=' || class
+    FROM clean WHERE kind = 'alarm'
+)
+SELECT session_id,
+       page_load_seq,
+       to_timestamp(srv / 1000.0) AS occurred_at,
+       event,
+       detail,
+       round((srv - lag(srv) OVER (PARTITION BY session_id ORDER BY srv)) / 1000.0, 3)
+           AS s_since_previous
+FROM incidents
+ORDER BY session_id, srv;

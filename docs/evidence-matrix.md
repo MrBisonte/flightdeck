@@ -22,7 +22,7 @@ reproducible from a clean clone.
 | Conformed dimensions, two sources | "data quality", "metadata driven ETL" | flightdeck | `fixtures/reference/` joined to telemetry | `./demo.sh curated` | Coverage table |
 | Data minimization | "GDPR compliant design in regulated European industries" | flightdeck | `scripts/sanitize_flightlog.py`, `fixtures/SANITIZATION.md` | `python scripts/sanitize_flightlog.py --check fixtures/raw` | The sanitization table |
 | CI and test gating | "CI/CD with automated test gating on every change" | all three | GitHub Actions, 26 tests, contract reconciliation gated in CI | Open the Actions tab | Badge |
-| Evidence based decisions | "shipping working proofs of concept before asking for investment" | crow-archer | The `err` record, its stack, the fix commit, the regression test | Beat 1 | Log excerpt |
+| Evidence based decisions | "shipping working proofs of concept before asking for investment" | crow-archer, flightdeck | `incident_timeline`, then the stack, then [PR #42](https://github.com/MrBisonte/crow-archer/pull/42) and its regression test | `./demo.sh curated` | Log excerpt |
 
 ## The numbers, all reproducible
 
@@ -40,6 +40,7 @@ reproducible from a clean clone.
 | Dimension coverage | state 10/15, mode 1/3, char 4/5, boss 4/4 | `dimension_coverage` |
 | Full run, cold | about 3 seconds | `./demo.sh` |
 | Quickstart from clean clone | verified, well under 5 minutes | Clone and run |
+| Time to detection, crash to alarm | 1.323 s | `incident_timeline` |
 
 ## Honest gaps, stated before anyone asks
 
@@ -47,7 +48,7 @@ These are on the record so the demo never has to bluff.
 
 | Gap | The honest position |
 |---|---|
-| **Only one bug is shown live, not two** | The recorder caught two on its first day. The crash is fully evidenced: log record, stack at `pathfinding.ts:67:30`, fix commit `28da21a`, regression test `d127a7e`. The latched key bug is evidenced by fix commit `7a02a55` only. Its session is not in the fixture set, and the playbook says `heldKeys` is the field that would show it, which is empty in all four alarms here. So: one shown end to end, one cited |
+| **Only one bug is shown live, not two** | The recorder caught two on its first day. The crash is fully evidenced end to end: the `err` record, a `loop-dead` alarm 1.323 s later from a different code path, the stack at `pathfinding.ts:67:30`, and the fix plus regression test in [PR #42](https://github.com/MrBisonte/crow-archer/pull/42). The latched key bug is evidenced by its fix commit only. Its session is not in the fixture set, and the playbook says `heldKeys` is the field that would show it, which is empty in all four alarms here. So: one shown end to end, one cited |
 | **Loss accounting reports zero** | The ring never overflowed, peak 32 against a cap of 400. The mechanism is real and the number is checkable, but this data does not demonstrate loss being caught. The claim is "proven zero", not "caught loss" |
 | **The quarantine has one row** | It is a real one, an orphan `bye` whose `hello` is in another file. Not a synthetic fixture. One row is a small demonstration and it should be described that way |
 | **One source, not many** | The CV claims multi source ingestion. This demo has telemetry plus a reference dimension set, which is two, and duckEL carries the Postgres, Snowflake, S3 and Parquet adapters. The genuinely multi source work is at the day job and cannot be shown |

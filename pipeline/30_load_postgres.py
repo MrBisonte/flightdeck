@@ -32,7 +32,7 @@ SCHEMA = "curated"
 RELATIONS = [
     "session_summary", "session_context", "frame_time_by_span", "alarms_by_class",
     "clock_skew", "srv_gaps", "gap_explained", "loss_accounting",
-    "dimension_coverage", "error_report", "quarantine",
+    "dimension_coverage", "error_report", "incident_timeline", "quarantine",
 ]
 
 
