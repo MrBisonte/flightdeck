@@ -19,3 +19,4 @@ COPY (SELECT * FROM session_context)    TO 'warehouse/curated/session_context.pa
 -- clean data without being able to see what was held back has no way to judge
 -- how complete it is.
 COPY (SELECT * FROM quarantine)         TO 'warehouse/curated/quarantine.parquet'         (FORMAT PARQUET, COMPRESSION ZSTD);
+COPY (SELECT * FROM incident_timeline)  TO 'warehouse/curated/incident_timeline.parquet'  (FORMAT PARQUET, COMPRESSION ZSTD);
