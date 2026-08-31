@@ -133,3 +133,40 @@ def test_a_beat_over_the_event_cap_is_quarantined(run_pipeline):
 
     reasons = [r[0] for r in con.execute("SELECT reason FROM quarantine").fetchall()]
     assert "events_per_beat_over_cap" in reasons
+
+
+def test_a_uuid_client_id_is_read_as_text(run_pipeline):
+    """crypto.randomUUID output must not change the column type.
+
+    The JSON reader infers UUID for a value that looks like one. The recorder's
+    fallback id, used where the context is not secure, is a plain string. Two
+    captures would then produce Parquet partitions with different types for the
+    same column, and a read across them fails. The raw layer casts, so both
+    land as text.
+    """
+    con = run_pipeline(session(with_cid="00a71a80-8ac9-4ecd-8b7d-c2998328d48f"))
+
+    column_type, = con.execute(
+        "SELECT column_type FROM (DESCRIBE SELECT cid FROM raw)"
+    ).fetchone()
+    assert column_type == "VARCHAR", f"cid landed as {column_type}, not text"
+
+    client_id, native = con.execute(
+        "SELECT client_id, has_native_client_id FROM sessions"
+    ).fetchone()
+    assert client_id == "00a71a80-8ac9-4ecd-8b7d-c2998328d48f"
+    assert native is True
+
+
+def test_uuid_and_fallback_ids_coexist(run_pipeline):
+    """A secure context capture and a fallback capture must load together."""
+    first = session(with_cid="00a71a80-8ac9-4ecd-8b7d-c2998328d48f")
+    second = session(with_cid="cid-m1x2y3-ab12cd34")
+    for rec in second:
+        rec["srv"] += 10_000
+        rec["wall"] += 10_000
+
+    con = run_pipeline(first + second)
+    ids = [r[0] for r in con.execute(
+        "SELECT client_id FROM sessions ORDER BY page_load_seq").fetchall()]
+    assert ids == ["00a71a80-8ac9-4ecd-8b7d-c2998328d48f", "cid-m1x2y3-ab12cd34"]
