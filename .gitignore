@@ -1,0 +1,18 @@
+# Private, never leaves this machine.
+# Honest gaps page, local COORDINATION.md copy, any CV material.
+_private/
+
+# Generated pipeline output.
+warehouse/
+*.duckdb
+*.duckdb.wal
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
