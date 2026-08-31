@@ -19,10 +19,15 @@ jobs:
       - name: Install
         run: pip install -r requirements.txt
 
+      # Pinned release asset, not the install script. The script needs bash,
+      # runs under sh here, and resolved a 404 for the latest tag.
       - name: Install DuckDB CLI
+        env:
+          DUCKDB_VERSION: "1.5.1"
         run: |
-          curl -sSL https://install.duckdb.org | sh
-          echo "$HOME/.duckdb/cli/latest" >> "$GITHUB_PATH"
+          curl -sSLf -o /tmp/duckdb.zip             "https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip"
+          unzip -q -d /usr/local/bin /tmp/duckdb.zip
+          duckdb --version
 
       - name: Tests
         run: python -m pytest tests/ -q
