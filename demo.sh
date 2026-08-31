@@ -62,6 +62,7 @@ mkdir -p warehouse/curated
 run_check () {
   banner "Contract, sanitization gate"
   python scripts/sanitize_flightlog.py --check fixtures/raw
+  python scripts/check_ste.py README.md docs/*.md fixtures/SANITIZATION.md fixtures/reference/README.md
   python -m pytest tests/ -q
   done_in
 }
