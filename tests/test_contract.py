@@ -45,18 +45,19 @@ def test_span_enum_is_the_six_frame_sections_in_order():
     assert CONTRACT["enums"]["span"] == ["sim", "tiles", "fog", "bodies", "vignette", "hud"]
 
 
-@pytest.mark.parametrize(
-    "cap_key, sql_variable",
-    [
-        ("events_per_beat", "cap_events_per_beat"),
-        ("events_per_bye", "cap_events_per_bye"),
-        ("trace_frames", "cap_trace_frames"),
-    ],
-)
-def test_sql_constant_matches_contract_cap(cap_key, sql_variable):
-    match = re.search(rf"SET variable {sql_variable}\s*=\s*(\d+)", TYPED_SQL)
-    assert match, f"{sql_variable} is not set in the typed layer"
+@pytest.mark.parametrize("cap_key", ["events_per_beat", "events_per_bye", "trace_frames"])
+def test_sql_constant_matches_contract_cap(cap_key):
+    """The caps are a table in the warehouse. They must equal the YAML."""
+    match = re.search(rf"\('{cap_key}',\s*(\d+)\)", TYPED_SQL)
+    assert match, f"{cap_key} is not inserted into contract_caps"
     assert int(match.group(1)) == CONTRACT["caps"][cap_key]
+
+
+def test_caps_are_a_table_not_session_variables():
+    """Session variables do not survive a new connection, so a later layer would
+    read NULL and every cap check would silently pass."""
+    assert "CREATE OR REPLACE TABLE contract_caps" in TYPED_SQL
+    assert "SET variable cap_" not in TYPED_SQL
 
 
 def test_alarm_classes_in_sql_match_the_contract():
