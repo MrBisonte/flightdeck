@@ -22,11 +22,22 @@ CREATE OR REPLACE VIEW ref_modes  AS SELECT * FROM read_csv('fixtures/reference/
 CREATE OR REPLACE VIEW ref_chars  AS SELECT * FROM read_csv('fixtures/reference/characters.csv');
 CREATE OR REPLACE VIEW ref_bosses AS SELECT * FROM read_csv('fixtures/reference/boss_kinds.csv');
 
--- Contract constants. Mirrored from contracts/flight_log.yml, which is the
--- source of truth. tests/test_contract.py asserts these agree.
-SET variable cap_events_per_beat = 400;
-SET variable cap_events_per_bye  = 100;
-SET variable cap_trace_frames    = 120;
+-- Contract caps, materialized as a table rather than session variables.
+--
+-- Session variables do not survive across connections, so a later layer opening
+-- its own connection would silently read NULL and every cap check would pass.
+-- As a table the contract is durable, queryable, and joinable, which is what
+-- governance as code should mean in practice.
+--
+-- Mirrored from contracts/flight_log.yml, which is the source of truth.
+-- tests/test_contract.py asserts these agree.
+CREATE OR REPLACE TABLE contract_caps (name VARCHAR, value BIGINT);
+INSERT INTO contract_caps VALUES
+    ('events_per_beat', 400),
+    ('events_per_bye',  100),
+    ('trace_frames',    120);
+
+CREATE OR REPLACE MACRO cap(n) AS (SELECT value FROM contract_caps WHERE name = n);
 
 CREATE OR REPLACE VIEW landed AS
 SELECT
@@ -82,17 +93,17 @@ UNION ALL
 SELECT 'beats', session_id, page_load_seq, srv, kind, 'events_per_beat_over_cap',
        'events=' || CAST(len(events) AS VARCHAR)
 FROM landed
-WHERE kind = 'beat' AND len(events) > getvariable('cap_events_per_beat')
+WHERE kind = 'beat' AND len(events) > cap('events_per_beat')
 UNION ALL
 SELECT 'sessions', session_id, page_load_seq, srv, kind, 'events_per_bye_over_cap',
        'events=' || CAST(len(events) AS VARCHAR)
 FROM landed
-WHERE kind = 'bye' AND len(events) > getvariable('cap_events_per_bye')
+WHERE kind = 'bye' AND len(events) > cap('events_per_bye')
 UNION ALL
 SELECT 'spans', session_id, page_load_seq, srv, kind, 'trace_frames_over_cap',
        'frames=' || CAST(trace.frames AS VARCHAR)
 FROM landed
-WHERE trace IS NOT NULL AND trace.frames > getvariable('cap_trace_frames')
+WHERE trace IS NOT NULL AND trace.frames > cap('trace_frames')
 UNION ALL
 SELECT 'landed', session_id, page_load_seq, srv, kind, 'srv_missing', 'srv IS NULL'
 FROM landed WHERE srv IS NULL;
