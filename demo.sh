@@ -48,6 +48,12 @@ if [ "${1:-}" = "--live" ]; then
   live_dir="${2:?--live needs a directory}"
   newest=$(ls -1t "$live_dir"/*.jsonl 2>/dev/null | head -1 || true)
   [ -n "$newest" ] || { echo "FAIL: no *.jsonl under $live_dir" >&2; exit 1; }
+  # DuckDB is a native Windows binary. It cannot read a Git Bash path such as
+  # /c/Users/..., so convert to C:/Users/... where cygpath exists. On Linux and
+  # macOS there is no cygpath and the path passes through unchanged.
+  if command -v cygpath >/dev/null 2>&1; then
+    newest=$(cygpath -m "$newest")
+  fi
   SOURCE_GLOB="$newest"
   SOURCE_LABEL="live capture, $(basename "$newest")"
   shift 2

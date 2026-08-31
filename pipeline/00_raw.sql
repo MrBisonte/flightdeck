@@ -16,7 +16,14 @@ SELECT
     -- per dev server run. regexp_extract is anchored on the sink's own naming.
     regexp_extract(filename, 'session-([0-9TZ:.-]+)\.jsonl$', 1) AS session_id,
     CAST(to_timestamp(srv / 1000.0) AS DATE)                     AS session_date,
-    * EXCLUDE (filename)
+    -- cid is text, always, whatever it looks like.
+    --
+    -- crypto.randomUUID gives a value the JSON reader infers as UUID. The
+    -- recorder's fallback id, used where the context is not secure, is a plain
+    -- string. Without this cast the two produce Parquet partitions with
+    -- different types for the same column, and a read across them fails.
+    CAST(cid AS VARCHAR)                                         AS cid,
+    * EXCLUDE (filename, cid)
 FROM (
         SELECT * FROM read_json(
             getvariable('raw_glob'),
