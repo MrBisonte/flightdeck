@@ -13,7 +13,8 @@ The telemetry comes from the flight recorder in
 `fixtures/raw/` hold 1260 records of real play. Two sessions contain alarms and
 an uncaught error. One session is clean.
 
-Read [docs/architecture.md](docs/architecture.md) for the full picture.
+Read [docs/architecture.md](docs/architecture.md) for the full picture. Read
+[docs/defect-log.md](docs/defect-log.md) for what broke on the way there.
 
 ## Quickstart
 
@@ -86,6 +87,7 @@ throttling does not explain.
 | `pipeline/` | The six pipeline steps, in order |
 | `scripts/` | The sanitizer, a credential scan, an STE doc check |
 | `docs/architecture.md` | End to end, data flows, topology |
+| `docs/defect-log.md` | Every defect found while building this, and its fix |
 | `demo.sh` | Every step, one command |
 
 ## Three rules this repository follows

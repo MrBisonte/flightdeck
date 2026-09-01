@@ -35,6 +35,7 @@ PASSIVE_ALLOWED = {
     "based", "used", "named", "typed", "documented", "committed", "recorded",
     "related", "detailed", "limited", "fixed", "closed", "open", "hidden",
     "needed", "required", "supposed", "advanced", "involved",
+    "green", "golden", "open", "given", "written",
 }
 
 SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
@@ -66,6 +67,10 @@ def prose_lines(text: str) -> list[tuple[int, str]]:
         if set(stripped) <= set("-|: "):      # table rule
             out.append((n, ""))
             continue
+        # A list item starts its own paragraph. Its continuation lines stay
+        # with it, so a wrapped item is still measured as one unit.
+        if stripped[0] in "-*" or (stripped[0].isdigit() and "." in stripped[:3]):
+            out.append((n, ""))
         out.append((n, stripped))
     return out
 
