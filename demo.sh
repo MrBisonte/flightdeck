@@ -51,6 +51,12 @@ if [ "${1:-}" = "--live" ]; then
   # DuckDB is a native Windows binary. It cannot read a Git Bash path such as
   # /c/Users/..., so convert to C:/Users/... where cygpath exists. On Linux and
   # macOS there is no cygpath and the path passes through unchanged.
+  # Sanitize a live capture the same way a fixture is sanitized. Without this
+  # the raw user agent reaches the curated layer and the exporter payload, and
+  # a live demo puts the browser build on screen.
+  mkdir -p warehouse/live
+  python scripts/sanitize_flightlog.py "$live_dir" warehouse/live >/dev/null
+  newest="warehouse/live/$(basename "$newest")"
   if command -v cygpath >/dev/null 2>&1; then
     newest=$(cygpath -m "$newest")
   fi
