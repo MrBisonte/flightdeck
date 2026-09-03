@@ -4,20 +4,20 @@ This page records every defect found while building this repository. It records
 what broke, why, and what fixed it.
 
 The log exists because a pipeline that claims to find problems in other people's
-data has to account for the problems in its own build. This log lists eleven
-defects. All eleven are closed.
+data has to account for the problems in its own build. This log lists twelve
+defects. All twelve are closed.
 
 ## Summary
 
 | Severity | Count | Meaning |
 |---|---|---|
 | High | 7 | Would reach a user, break the demo, or disclose information |
-| Medium | 4 | Caught inside the build, or degrades quality without breaking it |
+| Medium | 5 | Caught inside the build, or degrades quality without breaking it |
 
 | Category | Count |
 |---|---|
 | Data contract and schema | 3 |
-| Tooling and gates | 4 |
+| Tooling and gates | 5 |
 | Build and packaging | 2 |
 | Process | 2 |
 
@@ -31,7 +31,7 @@ This is the useful part of the table. It shows which control earned its place.
 | Unit or integration test | 3 | DEF-02, DEF-04, DEF-11 |
 | Live rehearsal | 2 | DEF-08, DEF-09 |
 | CI | 2 | DEF-05, DEF-06 |
-| Manual check | 1 | DEF-07 |
+| Manual check | 2 | DEF-07, DEF-12 |
 | Peer review | 1 | DEF-10 |
 
 ```
@@ -198,6 +198,21 @@ on merge. A second reader caught it.
 
 **Note.** The test suite was green and wrong. Sample data that does not resemble
 production data tests the harness, not the system.
+
+### DEF-12. A live capture reached the output unsanitized
+
+| Field | Detail |
+|---|---|
+| **Severity** | Medium |
+| **Category** | Tooling and gates |
+| **Symptom** | The exporter payload carried a full user agent string, including the browser build |
+| **Root cause** | The sanitizer ran only when preparing fixtures. The live capture path read the log directly, so a live run bypassed it |
+| **Resolution** | The live path sanitizes into a working directory first. Live and fixture inputs now take the same route |
+| **Found by** | Manual check of a live run |
+| **Fixed in** | this commit |
+
+**Note.** The fixture path was clean and stayed clean, which is why no test
+caught this. The defect lived only on the path that skipped the step.
 
 ## What the log says
 
