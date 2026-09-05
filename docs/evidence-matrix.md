@@ -22,7 +22,7 @@ Each claim on this page maps to one of three things:
 | Typed layer for consumers | A typed layer that downstream consumers read | flightdeck | `session_context`, one typed row per page load | `./demo.sh posthog` |
 | Conformed dimensions | Shared reference dimensions, with their coverage reported | flightdeck | `fixtures/reference/` joined to the telemetry | `./demo.sh curated` |
 | Data minimization | The committed logs carry no real user agent and no real origin. A check enforces it | flightdeck | `sanitize_flightlog.py`, `SANITIZATION.md` | `python scripts/sanitize_flightlog.py --check fixtures/raw` |
-| CI and test gating | CI tests every change | all three | GitHub Actions. 33 tests. CI gates the reconciliation | Open the Actions tab |
+| CI and test gating | CI tests every change | all three | GitHub Actions. 35 tests. CI gates the reconciliation | Open the Actions tab |
 | Evidence based decisions | Decisions follow recorded evidence, from the alarm to the fix | crow-archer, flightdeck | `incident_timeline`, then the stack, then PR 42 | `./demo.sh curated` |
 
 ## The numbers
