@@ -216,7 +216,7 @@ caught this. The defect lived only on the path that skipped the step.
 
 ## What the log says
 
-Three patterns come out of eleven entries.
+Three patterns come out of twelve entries.
 
 1. **Controls that always pass are invisible.** DEF-03 and DEF-11 both produced
    a green result over a broken check. Both needed something outside the check
