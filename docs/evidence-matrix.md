@@ -22,7 +22,7 @@ Each claim on this page maps to one of three things:
 | Typed layer for consumers | "typed data layers for downstream AI consumption" | flightdeck | `session_context`, one typed row per page load | `./demo.sh posthog` | The printed payload |
 | Conformed dimensions | "data quality", "metadata driven ETL" | flightdeck | `fixtures/reference/` joined to the telemetry | `./demo.sh curated` | The coverage table |
 | Data minimization | "GDPR compliant design in regulated European industries" | flightdeck | `sanitize_flightlog.py`, `SANITIZATION.md` | `python scripts/sanitize_flightlog.py --check fixtures/raw` | The change table |
-| CI and test gating | "CI/CD with automated test gating on every change" | all three | GitHub Actions. 33 tests. CI gates the reconciliation | Open the Actions tab | The badge |
+| CI and test gating | "CI/CD with automated test gating on every change" | all three | GitHub Actions. 35 tests. CI gates the reconciliation | Open the Actions tab | The badge |
 | Evidence based decisions | "shipping working proofs of concept before asking for investment" | crow-archer, flightdeck | `incident_timeline`, then the stack, then PR 42 | `./demo.sh curated` | The log excerpt |
 
 ## The numbers
