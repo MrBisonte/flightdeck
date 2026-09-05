@@ -1,0 +1,16 @@
+state,is_run_state,note
+menu,false,title screen
+charselect,false,character picker
+mapselect,false,map picker
+controls,false,controls screen
+playing,true,sim clock advances
+stage_intro,false,between stages
+boss_entrance,false,boss cutscene
+boss_fight,true,sim clock advances
+paused,false,pause overlay
+chooser,false,in-run choice
+inventory,false,inventory screen
+talents,false,talent tree
+gameover,false,run ended
+win,false,run won
+multiplayer,false,multiplayer screen

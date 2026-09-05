@@ -1,0 +1,54 @@
+# Data contract for the crow-archer flight log.
+#
+# Source of truth: docs/playbooks/monitored-playtest.md in the crow-archer
+# repository, which documents the wire format the recorder and sink implement.
+# The enum members also exist as reference dimensions under fixtures/reference/,
+# and tests/test_contract.py asserts the two never drift apart.
+#
+# Enforcement: pipeline/10_typed.sql. A row that violates any rule below is
+# written to the quarantine relation with a reason. Nothing is silently dropped.
+
+version: 1
+
+record_kinds: [hello, beat, alarm, err, bye]
+
+required_fields:
+  all:   [kind, srv]
+  hello: [wall, href, ua, dpr]
+  beat:  [wall, perf, raf, vis, pulse, events]
+  alarm: [class, wall, perf, pulse, blockers, trace, events]
+  err:   [wall, msg, stack, events]
+  bye:   [wall, events]
+
+enums:
+  # 15 application states, the values the render dispatch branches on.
+  state: [menu, charselect, mapselect, controls, playing, stage_intro,
+          boss_entrance, boss_fight, paused, chooser, inventory, talents,
+          gameover, win, multiplayer]
+  mode: [brawl, waves, siege]
+  char: [archer, wizard, knight, ranger, sapper]
+  boss: [crowking, dark_archer, dark_knight, minotaur]   # nullable
+  alarm_class: [loop-dead, logic-freeze, no-frames]
+  trace_level: [off, time, ops]
+  visibility: [visible, hidden]
+  # Frame sections, in the order they run.
+  span: [sim, tiles, fog, bodies, vignette, hud]
+
+caps:
+  events_per_beat: 400          # flight-recorder.ts MAX_EVENTS_PER_BEAT
+  events_per_bye: 100           # the final drain is the last 100 entries
+  trace_frames: 120             # the tracer holds at most 120 frames
+  logger_ring_capacity: 500     # src/sim/log.ts Logger
+  sink_body_bytes: 1000000      # flight-sink.ts MAX_BODY_BYTES
+
+invariants:
+  # srv is stamped by the server on arrival, so it is the only clock the page
+  # cannot influence. It must be present and must not go backwards within a
+  # session file.
+  - name: srv_present
+    rule: srv IS NOT NULL
+  - name: srv_monotonic_per_session
+    rule: srv >= lag(srv) within session_id ordered by arrival
+  # A page load opens with hello. Records before the first hello are orphans.
+  - name: page_load_opens_with_hello
+    rule: page_load_seq >= 1
