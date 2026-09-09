@@ -37,7 +37,7 @@ flowchart LR
   curated --> published[(curated Parquet)]
   curated --> postgres[(PostgreSQL)]
   published --> site([site])
-  published --> posthog([PostHog export])
+  published --> exporters([exporters])
 ```
 
 | # | Step | Reads | Writes | Rule it applies |
@@ -52,7 +52,7 @@ flowchart LR
 | 8 | `20_curated.sql` defines eleven views | entities | views | Every business number lives here, and only here |
 | 9 | `25_publish.sql` copies fifteen relations to Parquet | views, tables | `warehouse/curated/*.parquet` | ZSTD compression |
 | 10 | `30_load_postgres.py` loads twelve relations | Parquet | PostgreSQL | An explicit relation list, no globbing |
-| 11 | `40_posthog_export.py` prints a batch | Parquet | stdout | The exporter makes no network call |
+| 11 | `40_export.py` prints payloads in three formats | Parquet | stdout, files | The exporter makes no network call |
 | 12 | The site queries the Parquet in the browser | Parquet | rendered page | The site holds no query the pipeline holds |
 
 > **Warning.** Step 4 is the subtle one. A session file is not a page load. The

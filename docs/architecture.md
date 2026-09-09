@@ -45,7 +45,7 @@ flowchart TB
 
   subgraph D["4. CONSUMERS"]
     pg[("PostgreSQL")]
-    ph["PostHog<br/>dry run"]
+    ph["exporters<br/>dry run"]
     site["static site<br/>queries in the browser"]
   end
 
@@ -79,7 +79,7 @@ Each stage has one owner. Data moves in one direction only.
 | Record | Recorder, in the browser | Choose what to send. Choose when |
 | Stamp | Sink, in the dev server | Add the arrival time. Append the file |
 | Structure | Pipeline, this repository | Type the data. Apply the contract |
-| Read | PostgreSQL, PostHog | Read only. Never write back |
+| Read | PostgreSQL, the exporters, the site | Read only. Never write back |
 
 The sink is the only writer of a session file. No consumer writes back.
 Therefore no stage can change what the recorder captured.
@@ -259,7 +259,7 @@ makes the result checkable.
 
 ```
                         +--> PostgreSQL, relational tables
-   curated Parquet  ----+--> PostHog, an event stream
+   curated Parquet  ----+--> exporters, OTLP and CloudEvents
                         +--> the site, queried in the browser
 ```
 
@@ -277,7 +277,7 @@ flowchart LR
   typed -->|20_curated| cur["11 views"]
   cur -->|25_publish| cparq[("warehouse/curated")]
   cparq -->|30_load_postgres| pg[("postgres<br/>curated.*")]
-  cparq -->|40_posthog_export| ph["PostHog batch"]
+  cparq -->|40_export| ph["OTLP, CloudEvents"]
   cparq -->|site loader| web["site pages"]
 ```
 
@@ -291,7 +291,7 @@ flowchart LR
 | 4 | `./demo.sh curated` | Build the views |
 | 5 | `./demo.sh publish` | Write the curated Parquet |
 | 6 | `./demo.sh load` | Load PostgreSQL |
-| 7 | `./demo.sh posthog` | Print the PostHog batch |
+| 7 | `./demo.sh export` | Print the export payloads |
 
 Use `./demo.sh` to run all seven steps. The full run takes 3 to 5 seconds.
 
@@ -369,4 +369,5 @@ Use the `incident_timeline` view to see this.
 | [reference/README.md](../fixtures/reference/README.md) | The second data source |
 | [evidence-matrix.md](evidence-matrix.md) | Claims, evidence, and known gaps |
 | [hlad.md](hlad.md) | The relational model, units, keys, and five worked records |
+| [runbook-export.md](runbook-export.md) | Human setup for the export workflow |
 | [flight_log.yml](../contracts/flight_log.yml) | The contract itself |
