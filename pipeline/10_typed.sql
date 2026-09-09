@@ -32,10 +32,16 @@ CREATE OR REPLACE VIEW ref_bosses AS SELECT * FROM read_csv('fixtures/reference/
 -- Mirrored from contracts/flight_log.yml, which is the source of truth.
 -- tests/test_contract.py asserts these agree.
 CREATE OR REPLACE TABLE contract_caps (name VARCHAR, value BIGINT);
+-- Every cap the contract declares, not only the ones a check happens to use.
+-- A cap that never reaches the warehouse is a rule no query can test, and
+-- logger_ring_capacity and sink_body_bytes sat in the YAML alone until the
+-- contract test started deriving its parameters from the YAML itself.
 INSERT INTO contract_caps VALUES
-    ('events_per_beat', 400),
-    ('events_per_bye',  100),
-    ('trace_frames',    120);
+    ('events_per_beat',       400),
+    ('events_per_bye',        100),
+    ('trace_frames',          120),
+    ('logger_ring_capacity',  500),
+    ('sink_body_bytes',   1000000);
 
 CREATE OR REPLACE MACRO cap(n) AS (SELECT value FROM contract_caps WHERE name = n);
 
