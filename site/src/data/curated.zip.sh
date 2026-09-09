@@ -1,8 +1,8 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # One loader, one pipeline run. Every page reads from this archive, so the site
 # cannot disagree with the pipeline about a number. The loader never writes SQL
 # of its own: it runs the pipeline and ships what the pipeline published.
-set -euo pipefail
+set -eu
 cd "$(dirname "$0")/../../.."
 ./demo.sh build >&2
 python - <<'PY'

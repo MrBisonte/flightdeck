@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "observable preview",
     "build": "observable build",
-    "clean": "observable clean"
+    "clean": "node -e \"fs.rmSync('src/.observablehq/cache',{recursive:true,force:true})\""
   },
   "dependencies": {
     "@observablehq/framework": "1.13.4"
