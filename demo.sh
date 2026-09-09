@@ -2,8 +2,8 @@
 # The whole pipeline, end to end, on the committed fixtures.
 #
 #   ./demo.sh              every step, timed
-#   ./demo.sh build        raw, typed, curated, publish. No load, no exporter
-#   ./demo.sh <step>       one step: check raw typed curated publish load export
+#   ./demo.sh build        raw, typed, curated, gold, publish. No load, no exporter
+#   ./demo.sh <step>       one step: check raw typed curated gold publish load export
 #   ./demo.sh --live DIR   read DIR instead of the fixtures, newest file wins
 #
 # Live play falls back to fixtures by simply omitting --live. That is the whole
@@ -113,6 +113,16 @@ run_curated () {
   done_in
 }
 
+run_gold () {
+  banner "Gold, the game domain at the run grain"
+  duckdb "$DB" -f pipeline/22_gold.sql
+  echo "  -- what happened in the game --"
+  duckdb "$DB" -c "SELECT runs, characters_played, avg_run_sim_s, max_kills FROM game_summary;"
+  echo "  -- and how the boss fights ended --"
+  duckdb "$DB" -c "SELECT boss_key, encounters, progressed, died FROM boss_encounters_by_kind;"
+  done_in
+}
+
 run_publish () {
   banner "Publish, curated relations as open Parquet"
   duckdb "$DB" -f pipeline/25_publish.sql
@@ -138,11 +148,12 @@ case "$what" in
   raw)     run_raw ;;
   typed)   run_typed ;;
   curated) run_curated ;;
+  gold)    run_gold ;;
   publish) run_publish ;;
   load)    run_load ;;
   export)  run_export ;;
-  build)   run_raw; run_typed; run_curated; run_publish ;;
-  all)     run_check; run_raw; run_typed; run_curated; run_publish; run_load; run_export ;;
+  build)   run_raw; run_typed; run_curated; run_gold; run_publish ;;
+  all)     run_check; run_raw; run_typed; run_curated; run_gold; run_publish; run_load; run_export ;;
   *)       echo "unknown step: $what" >&2; sed -n '2,9p' "$0" >&2; exit 2 ;;
 esac
 
