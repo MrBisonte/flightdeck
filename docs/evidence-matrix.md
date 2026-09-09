@@ -19,7 +19,7 @@ Each claim on this page maps to one of three things:
 | Data engineering, ELT | "metadata driven ETL and ELT engines, data pipelines" | quacknettor | `configs/pipelines.yml`, config driven adapters | Open the config | The README |
 | Performance engineering | "performance engineering at query, parameter and OS level" | flightdeck | `frame_time_by_span`, over 3978 measurements | `./demo.sh curated` | The terminal cast |
 | Snowflake | "Snowflake (SnowPro Core certified)" | quacknettor | The Snowflake adapter. `COPY INTO` reads the same Parquet | Documented only | The documented path |
-| Typed layer for consumers | "typed data layers for downstream AI consumption" | flightdeck | `session_context`, one typed row per page load | `./demo.sh posthog` | The printed payload |
+| Typed layer for consumers | "typed data layers for downstream AI consumption" | flightdeck | `session_context`, one typed row per page load | `./demo.sh export` | The printed payload |
 | Conformed dimensions | "data quality", "metadata driven ETL" | flightdeck | `fixtures/reference/` joined to the telemetry | `./demo.sh curated` | The coverage table |
 | Data minimization | "GDPR compliant design in regulated European industries" | flightdeck | `sanitize_flightlog.py`, `SANITIZATION.md` | `python scripts/sanitize_flightlog.py --check fixtures/raw` | The change table |
 | CI and test gating | "CI/CD with automated test gating on every change" | all three | GitHub Actions. 35 tests. CI gates the reconciliation | Open the Actions tab | The badge |
