@@ -104,7 +104,8 @@ Run it locally:
 npm install --prefix site && npm run dev --prefix site
 ```
 
-Pages today: Overview, and Four clocks. The site goes live at
+Pages today: Start here, Overview, and Four clocks. Start here is the
+introduction. Overview is the dashboard. The site goes live at
 https://mrbisonte.github.io/flightdeck/ when this repository becomes public.
 
 ## Three rules this repository follows
