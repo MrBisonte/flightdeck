@@ -13,9 +13,8 @@ sql:
 A browser game writes a flight log. This pipeline reads that log, checks it
 against a written contract, and publishes the result as open Parquet.
 
-Every number on this page is the result of a query, and its SQL syntax sits
-above its result for transparency. There are no hardcoded values typed into the
-text.
+Every number on this page is the result of a query. The query sits above its
+result. No number is typed into the text.
 
 ## 1. Does the contract hold?
 
