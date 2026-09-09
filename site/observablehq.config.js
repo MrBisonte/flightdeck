@@ -7,7 +7,8 @@ export default {
   pages: [
     {name: "Start here", path: "/"},
     {name: "Overview", path: "/overview"},
-    {name: "Four clocks", path: "/four-clocks"}
+    {name: "Four clocks", path: "/four-clocks"},
+    {name: "The game", path: "/game"}
   ],
   footer: "Every number on this site is the result of a query over warehouse/curated, which ./demo.sh build writes."
 };
