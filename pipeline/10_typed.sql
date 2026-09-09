@@ -251,3 +251,20 @@ SELECT (SELECT count(*) FROM landed)                               AS landed_rec
        (SELECT count(*) FROM quarantine)                           AS quarantine_rows_all,
        (SELECT count(*) FROM clean) + (SELECT count(*) FROM quarantine WHERE relation = 'landed')
          = (SELECT count(*) FROM landed)                           AS reconciles;
+
+--------------------------------------------------------------------------------
+-- Warehouse manifest, so a reader can tell fresh data from a fresh build.
+--
+-- A site can always report when it was built. Without this, it cannot report
+-- when the data last arrived, and a stale warehouse behind a new build looks
+-- current. srv is the server receive time, the only clock the page cannot write.
+--
+-- sessions counts page loads, not files, which is the grain session_summary
+-- uses. Two grains on one site would print two different session counts.
+--------------------------------------------------------------------------------
+CREATE OR REPLACE VIEW warehouse_manifest AS
+SELECT count(*)                                           AS records,
+       count(DISTINCT session_id || '#' || page_load_seq) AS sessions,
+       min(srv)                                           AS first_srv,
+       max(srv)                                           AS last_srv
+FROM clean;

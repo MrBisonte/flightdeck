@@ -6,6 +6,9 @@
 
 COPY (SELECT * FROM session_summary)    TO 'warehouse/curated/session_summary.parquet'    (FORMAT PARQUET, COMPRESSION ZSTD);
 COPY (SELECT * FROM frame_time_by_span) TO 'warehouse/curated/frame_time_by_span.parquet' (FORMAT PARQUET, COMPRESSION ZSTD);
+-- spans is the per sample detail behind frame_time_by_span, from the typed
+-- layer. Published so a reader can see the distribution, not only p50 and p95.
+COPY (SELECT * FROM spans)              TO 'warehouse/curated/spans.parquet'              (FORMAT PARQUET, COMPRESSION ZSTD);
 COPY (SELECT * FROM alarms_by_class)    TO 'warehouse/curated/alarms_by_class.parquet'    (FORMAT PARQUET, COMPRESSION ZSTD);
 COPY (SELECT * FROM clock_skew)         TO 'warehouse/curated/clock_skew.parquet'         (FORMAT PARQUET, COMPRESSION ZSTD);
 COPY (SELECT * FROM srv_gaps)           TO 'warehouse/curated/srv_gaps.parquet'           (FORMAT PARQUET, COMPRESSION ZSTD);
@@ -20,3 +23,10 @@ COPY (SELECT * FROM session_context)    TO 'warehouse/curated/session_context.pa
 -- how complete it is.
 COPY (SELECT * FROM quarantine)         TO 'warehouse/curated/quarantine.parquet'         (FORMAT PARQUET, COMPRESSION ZSTD);
 COPY (SELECT * FROM incident_timeline)  TO 'warehouse/curated/incident_timeline.parquet'  (FORMAT PARQUET, COMPRESSION ZSTD);
+
+-- Metadata about the warehouse itself, not analytics over it. The site reads
+-- only this directory, so a number it must show has to be published here first.
+-- Reconciliation proves clean + quarantined = landed. The manifest says when
+-- the data last arrived.
+COPY (SELECT * FROM contract_reconciliation) TO 'warehouse/curated/contract_reconciliation.parquet' (FORMAT PARQUET, COMPRESSION ZSTD);
+COPY (SELECT * FROM warehouse_manifest)      TO 'warehouse/curated/warehouse_manifest.parquet'      (FORMAT PARQUET, COMPRESSION ZSTD);
