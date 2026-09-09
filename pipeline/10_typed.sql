@@ -42,8 +42,11 @@ CREATE OR REPLACE MACRO cap(n) AS (SELECT value FROM contract_caps WHERE name = 
 CREATE OR REPLACE VIEW landed AS
 SELECT
     *,
-    sum(CASE WHEN kind = 'hello' THEN 1 ELSE 0 END)
-        OVER (PARTITION BY session_id ORDER BY srv ROWS UNBOUNDED PRECEDING) AS page_load_seq,
+    -- INTEGER, not the HUGEINT a window sum returns by default. A HUGEINT lands
+    -- as DOUBLE in Parquet, so every consumer downstream has to cast it back.
+    CAST(sum(CASE WHEN kind = 'hello' THEN 1 ELSE 0 END)
+        OVER (PARTITION BY session_id ORDER BY srv ROWS UNBOUNDED PRECEDING) AS INTEGER)
+        AS page_load_seq,
     coalesce(cid, session_id || '#' || CAST(
         sum(CASE WHEN kind = 'hello' THEN 1 ELSE 0 END)
             OVER (PARTITION BY session_id ORDER BY srv ROWS UNBOUNDED PRECEDING) AS VARCHAR))
