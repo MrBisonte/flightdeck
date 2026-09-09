@@ -30,3 +30,14 @@ COPY (SELECT * FROM incident_timeline)  TO 'warehouse/curated/incident_timeline.
 -- the data last arrived.
 COPY (SELECT * FROM contract_reconciliation) TO 'warehouse/curated/contract_reconciliation.parquet' (FORMAT PARQUET, COMPRESSION ZSTD);
 COPY (SELECT * FROM warehouse_manifest)      TO 'warehouse/curated/warehouse_manifest.parquet'      (FORMAT PARQUET, COMPRESSION ZSTD);
+
+-- Gold. The game domain at the run grain, plus the four metric views the site
+-- reads. fact_run and fact_boss_encounter ship too, so a reader can recompute
+-- every metric above them rather than take the view on trust.
+COPY (SELECT * FROM fact_run)                TO 'warehouse/curated/fact_run.parquet'                (FORMAT PARQUET, COMPRESSION ZSTD);
+COPY (SELECT * FROM fact_boss_encounter)     TO 'warehouse/curated/fact_boss_encounter.parquet'     (FORMAT PARQUET, COMPRESSION ZSTD);
+COPY (SELECT * FROM game_summary)            TO 'warehouse/curated/game_summary.parquet'            (FORMAT PARQUET, COMPRESSION ZSTD);
+COPY (SELECT * FROM character_usage)         TO 'warehouse/curated/character_usage.parquet'         (FORMAT PARQUET, COMPRESSION ZSTD);
+COPY (SELECT * FROM boss_encounters_by_kind) TO 'warehouse/curated/boss_encounters_by_kind.parquet' (FORMAT PARQUET, COMPRESSION ZSTD);
+COPY (SELECT * FROM run_outcomes)            TO 'warehouse/curated/run_outcomes.parquet'            (FORMAT PARQUET, COMPRESSION ZSTD);
+COPY (SELECT * FROM contract_cap_history)    TO 'warehouse/curated/contract_cap_history.parquet'    (FORMAT PARQUET, COMPRESSION ZSTD);
