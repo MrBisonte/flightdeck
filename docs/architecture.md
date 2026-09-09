@@ -46,6 +46,7 @@ flowchart TB
   subgraph D["4. CONSUMERS"]
     pg[("PostgreSQL")]
     ph["PostHog<br/>dry run"]
+    site["static site<br/>queries in the browser"]
   end
 
   rec -->|"beat: fetch"| sink
@@ -54,6 +55,7 @@ flowchart TB
   ref[("reference CSV")] --> typed
   cur --> pg
   cur --> ph
+  cur --> site
 ```
 
 Read the dotted arrow carefully. It is important.
@@ -253,16 +255,16 @@ run without gaps inside one page load. Therefore a missing id proves a loss.
 The ring never came close to its limit. This is the honest result. The mechanism
 makes the result checkable.
 
-## One curated layer, two consumers
+## One curated layer, three consumers
 
 ```
                         +--> PostgreSQL, relational tables
-   curated Parquet  ----+
-                        +--> PostHog, an event stream
+   curated Parquet  ----+--> PostHog, an event stream
+                        +--> the site, queried in the browser
 ```
 
-Both consumers read the same Parquet files. Neither reads the DuckDB database.
-Neither reads the raw log. A third consumer needs a reader only.
+Each consumer reads the same Parquet files. None reads the DuckDB database. None
+reads the raw log. A fourth consumer needs a reader only.
 
 ## Lineage: one log file to one database table
 
@@ -276,6 +278,7 @@ flowchart LR
   cur -->|25_publish| cparq[("warehouse/curated")]
   cparq -->|30_load_postgres| pg[("postgres<br/>curated.*")]
   cparq -->|40_posthog_export| ph["PostHog batch"]
+  cparq -->|site loader| web["site pages"]
 ```
 
 ## The process, step by step
