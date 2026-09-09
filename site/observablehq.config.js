@@ -5,6 +5,7 @@ export default {
   // GitHub Pages serves a project site under the repository name.
   base: "/flightdeck/",
   pages: [
+    {name: "Overview", path: "/"},
     {name: "Four clocks", path: "/four-clocks"}
   ],
   footer: "Every number on this site is the result of a query over warehouse/curated, which ./demo.sh build writes."
