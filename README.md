@@ -86,9 +86,26 @@ throttling does not explain.
 | `fixtures/reference/` | The documented domain, as CSV. The second source |
 | `pipeline/` | The six pipeline steps, in order |
 | `scripts/` | The sanitizer, a credential scan, an STE doc check |
+| `site/` | The analytics site over the curated Parquet |
 | `docs/architecture.md` | End to end, data flows, topology |
 | `docs/defect-log.md` | Every defect found while building this, and its fix |
 | `demo.sh` | Every step, one command |
+
+## The site
+
+The curated Parquet also feeds a static site, built with Observable Framework.
+Every number on a page is the result of a query, printed above its result. The
+site holds no query that the pipeline holds. It reads what `./demo.sh build`
+published, and nothing else.
+
+Run it locally:
+
+```bash
+npm install --prefix site && npm run dev --prefix site
+```
+
+Pages today: Overview, and Four clocks. The site goes live at
+https://mrbisonte.github.io/flightdeck/ when this repository becomes public.
 
 ## Three rules this repository follows
 
