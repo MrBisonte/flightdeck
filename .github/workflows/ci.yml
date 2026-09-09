@@ -36,7 +36,7 @@ jobs:
         run: bash scripts/scan_secrets.sh
 
       - name: Docs follow Simplified Technical English
-        run: python scripts/check_ste.py README.md docs/*.md fixtures/SANITIZATION.md fixtures/reference/README.md
+        run: python scripts/check_ste.py README.md docs/*.md fixtures/SANITIZATION.md fixtures/reference/README.md site/src/*.md
 
       - name: Fixtures are sanitized
         run: python scripts/sanitize_flightlog.py --check fixtures/raw
@@ -52,3 +52,12 @@ jobs:
             FROM contract_reconciliation;"
           duckdb warehouse/flightdeck.duckdb -noheader -list -c \
             "SELECT reconciles FROM contract_reconciliation;" | grep -qx true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Site builds from the pipeline output
+        run: npm ci --prefix site && npm run build --prefix site
