@@ -109,7 +109,7 @@ def main() -> int:
     for e in events[:args.limit]:
         print("    " + json.dumps(e, default=str))
     print()
-    print("  Same Parquet files PostgreSQL read. One curated layer, two consumers.")
+    print("  Same Parquet files PostgreSQL read. One curated layer, three consumers.")
     return 0
 
 
