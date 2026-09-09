@@ -3,7 +3,7 @@
 #
 #   ./demo.sh              every step, timed
 #   ./demo.sh build        raw, typed, curated, publish. No load, no exporter
-#   ./demo.sh <step>       one step: check raw typed curated publish load posthog
+#   ./demo.sh <step>       one step: check raw typed curated publish load export
 #   ./demo.sh --live DIR   read DIR instead of the fixtures, newest file wins
 #
 # Live play falls back to fixtures by simply omitting --live. That is the whole
@@ -126,9 +126,9 @@ run_load () {
   done_in
 }
 
-run_posthog () {
-  banner "PostHog, the second consumer of the same files. Dry run"
-  python pipeline/40_posthog_export.py
+run_export () {
+  banner "Export, the same files in three wire formats. Dry run"
+  python pipeline/40_export.py
   done_in
 }
 
@@ -140,9 +140,9 @@ case "$what" in
   curated) run_curated ;;
   publish) run_publish ;;
   load)    run_load ;;
-  posthog) run_posthog ;;
+  export)  run_export ;;
   build)   run_raw; run_typed; run_curated; run_publish ;;
-  all)     run_check; run_raw; run_typed; run_curated; run_publish; run_load; run_posthog ;;
+  all)     run_check; run_raw; run_typed; run_curated; run_publish; run_load; run_export ;;
   *)       echo "unknown step: $what" >&2; sed -n '2,9p' "$0" >&2; exit 2 ;;
 esac
 
