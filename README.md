@@ -88,6 +88,7 @@ throttling does not explain.
 | `scripts/` | The sanitizer, a credential scan, an STE doc check |
 | `site/` | The analytics site over the curated Parquet |
 | `docs/architecture.md` | End to end, data flows, topology |
+| `docs/hlad.md` | The relational model: objects, units, keys, worked records |
 | `docs/defect-log.md` | Every defect found while building this, and its fix |
 | `demo.sh` | Every step, one command |
 

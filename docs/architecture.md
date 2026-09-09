@@ -368,4 +368,5 @@ Use the `incident_timeline` view to see this.
 | [SANITIZATION.md](../fixtures/SANITIZATION.md) | The two fields changed before commit |
 | [reference/README.md](../fixtures/reference/README.md) | The second data source |
 | [evidence-matrix.md](evidence-matrix.md) | Claims, evidence, and known gaps |
+| [hlad.md](hlad.md) | The relational model, units, keys, and five worked records |
 | [flight_log.yml](../contracts/flight_log.yml) | The contract itself |
