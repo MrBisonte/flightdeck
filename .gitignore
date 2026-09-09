@@ -16,3 +16,8 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# Site build output and dependencies.
+site/node_modules/
+site/dist/
+**/.observablehq/cache/
