@@ -103,11 +103,11 @@ def live_run(tmp_path_factory):
     newer = source_dir / "session-2026-09-11T09-00-00-000Z.jsonl"
     write_log(older, capture(1_789_000_000_000, beats=9))
     write_log(newer, capture(1_789_100_000_000, beats=3))
-    # demo.sh picks with `ls -1t`, which sorts on the modification time. Two
-    # files written in the same instant tie, and the tie breaks arbitrarily, so
-    # the times are set apart here rather than left to the filesystem clock.
-    os.utime(older, (1_000_000, 1_000_000))
-    os.utime(newer, (2_000_000, 2_000_000))
+    # The modification times are set the wrong way round on purpose. demo.sh
+    # picks on the timestamp in the filename, so the file named 09:00 has to
+    # win even though the file named 08:00 was touched more recently.
+    os.utime(older, (2_000_000, 2_000_000))
+    os.utime(newer, (1_000_000, 1_000_000))
 
     done = subprocess.run(
         ["bash", "./demo.sh", "--live", str(source_dir), "build"],
@@ -153,7 +153,11 @@ def test_an_empty_capture_directory_fails_with_a_reason(tmp_path):
 
 
 def test_the_newest_capture_wins(live_run):
-    """One page load, from the later file. The older file has nine beats."""
+    """One page load, from the later file. The older file has nine beats.
+
+    The fixture gives the older file the more recent modification time, so a
+    run that sorted on mtime would read nine beats and fail here.
+    """
     with warehouse(live_run) as con:
         sessions, beats = con.execute(
             "SELECT count(*), (SELECT count(*) FROM beats) FROM sessions").fetchone()
