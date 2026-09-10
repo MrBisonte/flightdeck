@@ -4,20 +4,20 @@ Every defect found while building this repository: what broke, why, and what
 fixed it.
 
 The log exists because a pipeline that claims to find problems in other people's
-data has to account for the problems in its own build. This log lists twelve
-defects. All twelve are closed.
+data has to account for the problems in its own build. This log lists thirteen
+defects. All thirteen are closed.
 
 ## Summary
 
 | Severity | Count | Meaning |
 |---|---|---|
-| High | 7 | Would reach a user, break the demo, or disclose information |
+| High | 8 | Would reach a user, break the demo, or disclose information |
 | Medium | 5 | Caught inside the build, or degrades quality without breaking it |
 
 | Category | Count |
 |---|---|
 | Data contract and schema | 3 |
-| Tooling and gates | 5 |
+| Tooling and gates | 6 |
 | Build and packaging | 2 |
 | Process | 2 |
 
@@ -29,7 +29,7 @@ The table shows which control earned its place.
 |---|---|---|
 | Running a gate | 2 | DEF-01, DEF-03 |
 | Unit or integration test | 3 | DEF-02, DEF-04, DEF-11 |
-| Live rehearsal | 2 | DEF-08, DEF-09 |
+| Live rehearsal | 3 | DEF-08, DEF-09, DEF-13 |
 | CI | 2 | DEF-05, DEF-06 |
 | Manual check | 2 | DEF-07, DEF-12 |
 | Peer review | 1 | DEF-10 |
@@ -37,12 +37,12 @@ The table shows which control earned its place.
 ```
    tests + gates   ->  5 defects   found before anything ran end to end
    CI              ->  2 defects   found on a clean machine, not this one
-   rehearsal       ->  2 defects   found only by running the real path
+   rehearsal       ->  3 defects   found only by running the real path
    review          ->  1 defect    found only by a second reader
 ```
 
-Only a live capture reached DEF-08 and DEF-09, and no test found them. That is
-the argument for rehearsing rather than assuming.
+Only a live capture reached DEF-08, DEF-09 and DEF-13, and no test found them.
+That is the argument for rehearsing rather than assuming.
 
 ## The register
 
@@ -214,9 +214,25 @@ production data tests the harness, not the system.
 **Note.** The fixture path was clean and stayed clean, which is why no test
 caught this. The defect lived only on the path that skipped the step.
 
+### DEF-13. The scrub named its fields, so it missed the rest
+
+| Field | Detail |
+|---|---|
+| **Severity** | High |
+| **Category** | Tooling and gates |
+| **Symptom** | A dev server origin reached `error_report`, `incident_timeline` and `session_context`, all three published |
+| **Root cause** | `sanitize_record` scrubbed origins from `ua`, `href` and `stack` by name. `err.msg` and every nested event body were on no list. The gate checked for filesystem paths and never for an origin, so it reported clean |
+| **Resolution** | The scrub walks every string in the record at any depth, and the gate rejects any origin whose host is not `localhost` |
+| **Found by** | Live rehearsal, on a capture built to look like a real one |
+| **Fixed in** | this commit |
+
+**Note.** DEF-12 moved the live path through the sanitizer. This defect was
+inside the sanitizer, so that fix could not reach it. A list of field names is
+only correct until someone adds a field.
+
 ## What the log says
 
-Three patterns come out of twelve entries.
+Three patterns come out of thirteen entries.
 
 1. **Controls that always pass are invisible.** DEF-03 and DEF-11 both produced
    a green result over a broken check. Both needed something outside the check

@@ -91,3 +91,61 @@ def test_committed_fixtures_are_clean():
     assert len(files) == 3, "expected three fixture sessions"
     for path in files:
         assert check_clean(path) == []
+
+
+# The scrub used to name three fields, ua, href and stack. Everything below is
+# a field it did not name. An origin in msg reached error_report,
+# incident_timeline and session_context, all of them published.
+def test_scrub_reaches_an_error_message():
+    rec = sanitize_record({
+        "kind": "err",
+        "msg": "Uncaught TypeError: failed to load http://192.168.1.50:5173/src/game.ts",
+    })
+    assert "192.168.1.50" not in rec["msg"]
+    assert rec["msg"].endswith("http://localhost/src/game.ts")
+
+
+def test_scrub_reaches_a_nested_event_body():
+    rec = sanitize_record({
+        "kind": "beat",
+        "events": [{
+            "id": 1, "level": "warn",
+            "message": "asset fetch failed from http://192.168.1.50:5173/assets/crow.png",
+            "data": {"url": "http://192.168.1.50:5173/assets/crow.png"},
+        }],
+    })
+    event = rec["events"][0]
+    assert "192.168.1.50" not in json.dumps(rec)
+    assert event["message"].endswith("http://localhost/assets/crow.png")
+    assert event["data"]["url"] == "http://localhost/assets/crow.png"
+
+
+def test_check_clean_flags_a_remote_origin(tmp_path):
+    """The gate reported clean while a private address sat in the output."""
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text(
+        json.dumps({"kind": "err", "msg": "boom at http://192.168.1.50:5173/x.js"}) + "\n",
+        encoding="utf-8")
+    assert any("non-local origin" in p for p in check_clean(bad))
+
+
+@pytest.mark.parametrize("href", [
+    "http://localhost/",
+    "http://localhost",
+    "http://localhost:5173/game",
+    "https://localhost/game",
+])
+def test_check_clean_allows_the_localhost_host(tmp_path, href):
+    ok = tmp_path / "ok.jsonl"
+    ok.write_text(json.dumps({"kind": "hello", "ua": "Chrome", "href": href}) + "\n",
+                  encoding="utf-8")
+    assert check_clean(ok) == []
+
+
+def test_check_clean_flags_a_host_that_only_starts_with_localhost(tmp_path):
+    """localhost.evil.com is not localhost."""
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text(json.dumps({"kind": "hello", "ua": "Chrome",
+                               "href": "http://localhost.evil.com/game"}) + "\n",
+                   encoding="utf-8")
+    assert any("non-local origin" in p for p in check_clean(bad))
