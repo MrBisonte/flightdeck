@@ -1,0 +1,194 @@
+/* Presentation mode.
+ *
+ * The site ships two views of the same page. Engineering is the default and is
+ * the site as it was: every query printed above its result. Dashboard hides the
+ * SQL and restyles the page for a reader who wants the answer, not the working.
+ *
+ * Nothing here recomputes anything. Both views render the same query results,
+ * so the two can never disagree.
+ *
+ * Everything below is scoped to html[data-view="dashboard"]. The engineering
+ * view inherits the stock Observable Framework theme untouched, which is the
+ * point: this file can be deleted and the original site is still there.
+ *
+ * To swap the visual direction, replace the token block and the card rules.
+ * The structure above them does not change.
+ */
+
+/* ---- Direction D, soft product ------------------------------------------ */
+html[data-view="dashboard"] {
+  --dash-bg: #f6f5fb;
+  --dash-card: #ffffff;
+  --dash-ink: #1c1a2e;
+  --dash-muted: #6b6880;
+  --dash-accent: #6d5ae0;
+  --dash-accent-soft: #f0edfd;
+  --dash-line: #eae8f4;
+  --dash-good: #0f9d7a;
+  color-scheme: light;
+
+  /* Framework's own theme variables, restated in light values.
+   *
+   * A reader whose system prefers dark gets the dark theme, and overriding
+   * body alone left the sidebar and every Plot axis painting themselves with
+   * dark-theme colors on a light card. These cascade to everything the theme
+   * styles, including charts, so there is one place to change rather than a
+   * growing list of selectors. */
+  --theme-foreground: #1c1a2e;
+  --theme-foreground-muted: #6b6880;
+  --theme-foreground-faint: #9490ab;
+  --theme-foreground-fainter: #c9c5da;
+  --theme-foreground-faintest: #eae8f4;
+  --theme-foreground-alt: #1c1a2e;
+  --theme-background: #f6f5fb;
+  --theme-background-alt: #ffffff;
+  --theme-foreground-focus: #6d5ae0;
+}
+
+html[data-view="dashboard"] body {
+  background: var(--dash-bg);
+  color: var(--dash-ink);
+  font-family: "Outfit", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* The SQL is not deleted, only hidden. One click brings it back. */
+html[data-view="dashboard"] .observablehq-pre-container {
+  display: none;
+}
+
+html[data-view="dashboard"] #observablehq-main h1 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--dash-ink);
+}
+
+html[data-view="dashboard"] #observablehq-main h2 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--dash-ink);
+  border: none;
+  margin-top: 2.4rem;
+}
+
+html[data-view="dashboard"] #observablehq-main p {
+  color: var(--dash-muted);
+  font-size: 15px;
+  line-height: 1.65;
+  text-wrap: pretty;
+}
+
+html[data-view="dashboard"] .card {
+  background: var(--dash-card);
+  border: none;
+  border-radius: 15px;
+  box-shadow: 0 1px 3px rgba(28, 26, 46, 0.07);
+  padding: 18px 20px;
+}
+
+html[data-view="dashboard"] .card h2 {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--dash-muted);
+  margin: 0;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+html[data-view="dashboard"] .card .big {
+  font-size: 32px;
+  font-weight: 600;
+  color: var(--dash-ink);
+  line-height: 1.1;
+  display: block;
+  margin-top: 10px;
+}
+
+html[data-view="dashboard"] .card p {
+  font-size: 13px;
+  color: var(--dash-muted);
+  margin: 8px 0 0 0;
+}
+
+html[data-view="dashboard"] #observablehq-main table {
+  background: var(--dash-card);
+  border-radius: 15px;
+  box-shadow: 0 1px 3px rgba(28, 26, 46, 0.07);
+  overflow: hidden;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+html[data-view="dashboard"] #observablehq-main th {
+  background: var(--dash-accent-soft);
+  color: var(--dash-accent);
+  font-weight: 500;
+  border: none;
+  padding: 11px 14px;
+}
+
+html[data-view="dashboard"] #observablehq-main td {
+  border: none;
+  border-top: 1px solid var(--dash-line);
+  padding: 10px 14px;
+  color: var(--dash-ink);
+}
+
+html[data-view="dashboard"] #observablehq-main figure {
+  background: var(--dash-card);
+  border-radius: 15px;
+  box-shadow: 0 1px 3px rgba(28, 26, 46, 0.07);
+  padding: 20px 22px;
+  margin: 1.4rem 0;
+}
+
+html[data-view="dashboard"] #observablehq-sidebar {
+  background: var(--dash-card);
+  border-right: 1px solid var(--dash-line);
+}
+
+/* ---- Sentences that are only true in one view --------------------------- */
+/* A page that says "the query sits above its result" must not say it while the
+ * query is hidden. Each page carries both sentences and shows the true one. */
+html[data-view="dashboard"] .only-engineering { display: none; }
+html[data-view="engineering"] .only-dashboard { display: none; }
+
+/* ---- The switch --------------------------------------------------------- */
+#view-switch {
+  position: fixed;
+  top: 14px;
+  right: 18px;
+  z-index: 400;
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--theme-background-alt, #f0eef7);
+  border: 1px solid var(--theme-foreground-faintest, #eae8f4);
+  font-family: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+#view-switch button {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  padding: 7px 14px;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--theme-foreground-muted, #6b6880);
+  font: inherit;
+  line-height: 1;
+}
+
+#view-switch button[aria-pressed="true"] {
+  background: #ffffff;
+  color: #1c1a2e;
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(28, 26, 46, 0.12);
+}
+
+@media (max-width: 640px) {
+  #view-switch { top: 8px; right: 8px; font-size: 12px; }
+  #view-switch button { padding: 6px 10px; }
+}

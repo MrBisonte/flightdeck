@@ -13,8 +13,18 @@ sql:
 The other pages ask whether the data is sound. This page asks what happened in
 the game. Same Parquet, different grain.
 
+<div class="only-engineering">
+
 Every number here is the result of a query, and its SQL syntax sits above its
 result for transparency. There are no hardcoded values typed into the text.
+
+</div>
+<div class="only-dashboard">
+
+Every number here is the result of a query. The queries are hidden in this view.
+Switch to Engineering, top right, to read the SQL above each result.
+
+</div>
 
 ## 1. A run is not a page load
 
@@ -63,6 +73,9 @@ display(html`<div class="grid grid-cols-3">
 
 ```sql echo id=runs
 SELECT run_id,
+       -- A short label for the axis. The full run_id stays in the table below,
+       -- so nothing is hidden; this only shortens what the chart prints.
+       'load ' || page_load_seq || ', run ' || run_seq AS run,
        character_key   AS character,
        first_map,
        maps_visited::INTEGER AS maps,
@@ -81,8 +94,8 @@ display(Plot.plot({
   x: {label: "seconds", grid: true},
   y: {label: null},
   marks: [
-    Plot.barX(runs, {y: "run_id", x: "wall_s", fill: "#d0d7de", sort: {y: "x"}}),
-    Plot.barX(runs, {y: "run_id", x: "playing_s", fill: "#0969da"}),
+    Plot.barX(runs, {y: "run", x: "wall_s", fill: "#d0d7de", sort: {y: "x"}}),
+    Plot.barX(runs, {y: "run", x: "playing_s", fill: "#6d5ae0"}),
     Plot.ruleX([0])
   ]
 }));
@@ -118,7 +131,7 @@ display(Plot.plot({
   x: {label: "seconds played", grid: true},
   y: {label: null},
   marks: [
-    Plot.barX(chars, {y: "character", x: "playing_s", fill: "#0969da", sort: {y: "-x"}}),
+    Plot.barX(chars, {y: "character", x: "playing_s", fill: "#6d5ae0", sort: {y: "-x"}}),
     Plot.ruleX([0])
   ]
 }));
