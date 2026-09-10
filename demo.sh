@@ -4,7 +4,7 @@
 #   ./demo.sh              every step, timed
 #   ./demo.sh build        raw, typed, curated, gold, publish. No load, no exporter
 #   ./demo.sh <step>       one step: check raw typed curated gold publish load export
-#   ./demo.sh --live DIR   read DIR instead of the fixtures, newest file wins
+#   ./demo.sh --live DIR   read DIR instead of the fixtures, latest filename wins
 #
 # Live play falls back to fixtures by simply omitting --live. That is the whole
 # kill switch: there is no live-only state to unwind.
@@ -46,7 +46,11 @@ require () {
 # ---------------------------------------------------------------- arguments
 if [ "${1:-}" = "--live" ]; then
   live_dir="${2:?--live needs a directory}"
-  newest=$(ls -1t "$live_dir"/*.jsonl 2>/dev/null | head -1 || true)
+  # The sink names every file session-<ISO 8601>.jsonl, so the newest capture
+  # is the last one in plain lexical order. Sorting on the modification time
+  # instead put a copied or restored directory in the wrong order, and two
+  # files written in the same instant tied and broke the tie arbitrarily.
+  newest=$(ls -1 "$live_dir"/*.jsonl 2>/dev/null | tail -1 || true)
   [ -n "$newest" ] || { echo "FAIL: no *.jsonl under $live_dir" >&2; exit 1; }
   # DuckDB is a native Windows binary. It cannot read a Git Bash path such as
   # /c/Users/..., so convert to C:/Users/... where cygpath exists. On Linux and
