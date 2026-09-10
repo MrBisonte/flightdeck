@@ -46,8 +46,18 @@ display(html`<div class="card">
 </div>`);
 ```
 
+<div class="only-engineering">
+
 That number is the result of the query above it, and so is every number on this
 site. There are no hardcoded values typed into the text.
+
+</div>
+<div class="only-dashboard">
+
+That number is the result of a query, and so is every number on this site. The
+queries are hidden in this view. Switch to Engineering, top right, to read them.
+
+</div>
 
 ## How the data gets here
 
