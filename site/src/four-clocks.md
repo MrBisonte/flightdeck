@@ -41,7 +41,6 @@ display(html`<div class="grid grid-cols-4">
   <div class="card"><h2>Largest skew</h2><span class="big">${s.max_ms} ms</span></div>
 </div>`);
 ```
-</div>
 
 The page clock and the server clock agree to within ${skew.get(0).max_ms} ms. The pipeline measures this. It does not assume it.
 

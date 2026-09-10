@@ -8,8 +8,8 @@ machine can check:
   2. Passive voice. STE prefers the active voice.
   3. Paragraph length. A paragraph uses 6 sentences or fewer.
 
-The script skips code blocks, tables, headings, and link definitions. Prose is
-the target, not data.
+The script skips YAML front matter, code blocks, tables, headings, and link
+definitions. Prose is the target, not data.
 
 Usage
     check_ste.py FILE [FILE ...]      report problems
@@ -41,11 +41,28 @@ PASSIVE_ALLOWED = {
 SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 
 
+def body(text: str) -> list[tuple[int, str]]:
+    """Return (line number, line) for everything after any YAML front matter.
+
+    Front matter is data, not prose, so it belongs with the code blocks and the
+    tables this checker already skips. A page that registers five data sources
+    otherwise reads as one 28 word sentence and fails the length check.
+
+    A document that opens with a rule and never closes it keeps its whole body.
+    """
+    lines = text.splitlines()
+    if lines and lines[0].strip() == "---":
+        for close, line in enumerate(lines[1:], start=2):
+            if line.strip() == "---":
+                return list(enumerate(lines[close:], start=close + 1))
+    return list(enumerate(lines, start=1))
+
+
 def prose_lines(text: str) -> list[tuple[int, str]]:
     """Return (line number, line) for prose only."""
     out: list[tuple[int, str]] = []
     in_code = False
-    for n, line in enumerate(text.splitlines(), 1):
+    for n, line in body(text):
         stripped = line.strip()
         if stripped.startswith("```"):
             in_code = not in_code

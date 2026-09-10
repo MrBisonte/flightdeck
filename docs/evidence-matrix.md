@@ -19,7 +19,7 @@ Each claim on this page maps to one of three things:
 | Data engineering, ELT | Config, not code, defines each pipeline | quacknettor | `configs/pipelines.yml`, config driven adapters | Open the config |
 | Performance engineering | Frame time by span, each percentile with its sample count | flightdeck | `frame_time_by_span`, over 3978 measurements | `./demo.sh curated` |
 | Snowflake | The same Parquet loads into Snowflake. Documented, not run | quacknettor | The Snowflake adapter. `COPY INTO` reads the same Parquet | Documented only |
-| Typed layer for consumers | A typed layer that downstream consumers read | flightdeck | `session_context`, one typed row per page load | `./demo.sh posthog` |
+| Typed layer for consumers | A typed layer that downstream consumers read | flightdeck | `session_context`, one typed row per page load | `./demo.sh export` |
 | Conformed dimensions | Shared reference dimensions, with their coverage reported | flightdeck | `fixtures/reference/` joined to the telemetry | `./demo.sh curated` |
 | Data minimization | The committed logs carry no real user agent and no real origin. A check enforces it | flightdeck | `sanitize_flightlog.py`, `SANITIZATION.md` | `python scripts/sanitize_flightlog.py --check fixtures/raw` |
 | CI and test gating | CI tests every change | all three | GitHub Actions. 35 tests. CI gates the reconciliation | Open the Actions tab |

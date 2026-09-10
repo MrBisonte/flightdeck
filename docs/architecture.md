@@ -45,7 +45,8 @@ flowchart TB
 
   subgraph D["4. CONSUMERS"]
     pg[("PostgreSQL")]
-    ph["PostHog<br/>dry run"]
+    ph["exporters<br/>dry run"]
+    site["static site<br/>queries in the browser"]
   end
 
   rec -->|"beat: fetch"| sink
@@ -54,6 +55,7 @@ flowchart TB
   ref[("reference CSV")] --> typed
   cur --> pg
   cur --> ph
+  cur --> site
 ```
 
 Read the dotted arrow carefully. It is important.
@@ -77,7 +79,7 @@ Each stage has one owner. Data moves in one direction only.
 | Record | Recorder, in the browser | Choose what to send. Choose when |
 | Stamp | Sink, in the dev server | Add the arrival time. Append the file |
 | Structure | Pipeline, this repository | Type the data. Apply the contract |
-| Read | PostgreSQL, PostHog | Read only. Never write back |
+| Read | PostgreSQL, the exporters, the site | Read only. Never write back |
 
 The sink is the only writer of a session file. No consumer writes back.
 Therefore no stage can change what the recorder captured.
@@ -253,16 +255,16 @@ run without gaps inside one page load. Therefore a missing id proves a loss.
 The ring never came close to its limit. This is the honest result. The mechanism
 makes the result checkable.
 
-## One curated layer, two consumers
+## One curated layer, three consumers
 
 ```
                         +--> PostgreSQL, relational tables
-   curated Parquet  ----+
-                        +--> PostHog, an event stream
+   curated Parquet  ----+--> exporters, OTLP and CloudEvents
+                        +--> the site, queried in the browser
 ```
 
-Both consumers read the same Parquet files. Neither reads the DuckDB database.
-Neither reads the raw log. A third consumer needs a reader only.
+Each consumer reads the same Parquet files. None reads the DuckDB database. None
+reads the raw log. A fourth consumer needs a reader only.
 
 ## Lineage: one log file to one database table
 
@@ -275,7 +277,8 @@ flowchart LR
   typed -->|20_curated| cur["11 views"]
   cur -->|25_publish| cparq[("warehouse/curated")]
   cparq -->|30_load_postgres| pg[("postgres<br/>curated.*")]
-  cparq -->|40_posthog_export| ph["PostHog batch"]
+  cparq -->|40_export| ph["OTLP, CloudEvents"]
+  cparq -->|site loader| web["site pages"]
 ```
 
 ## The process, step by step
@@ -288,7 +291,7 @@ flowchart LR
 | 4 | `./demo.sh curated` | Build the views |
 | 5 | `./demo.sh publish` | Write the curated Parquet |
 | 6 | `./demo.sh load` | Load PostgreSQL |
-| 7 | `./demo.sh posthog` | Print the PostHog batch |
+| 7 | `./demo.sh export` | Print the export payloads |
 
 Use `./demo.sh` to run all seven steps. The full run takes 3 to 5 seconds.
 
@@ -365,4 +368,6 @@ Use the `incident_timeline` view to see this.
 | [SANITIZATION.md](../fixtures/SANITIZATION.md) | The two fields changed before commit |
 | [reference/README.md](../fixtures/reference/README.md) | The second data source |
 | [evidence-matrix.md](evidence-matrix.md) | Claims, evidence, and known gaps |
+| [hlad.md](hlad.md) | The relational model, units, keys, and five worked records |
+| [runbook-export.md](runbook-export.md) | Human setup for the export workflow |
 | [flight_log.yml](../contracts/flight_log.yml) | The contract itself |
