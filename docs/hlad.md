@@ -60,6 +60,51 @@ flowchart LR
 > run. Event ids restart at 1 on each page load, so the file name keys nothing on
 > its own. The fixtures hold 16 page loads across 3 files.
 
+### 2.1 Runtime topology
+
+The flow above says what happens. This says where it happens.
+
+```mermaid
+flowchart LR
+  subgraph build[build machine]
+    sink[flight sink] --> rawp[(raw Parquet)]
+    rawp --> sqlp[pipeline SQL]
+    sqlp --> curp[(curated Parquet)]
+    curp --> bundle[(static bundle)]
+  end
+  subgraph host[GitHub Pages]
+    served[(HTML, JS, Parquet)]
+  end
+  subgraph tab[reader's browser tab]
+    wasm[DuckDB WebAssembly] --> page[rendered page]
+  end
+  bundle --> served
+  served -->|HTTP GET| wasm
+```
+
+| Component | Executes on | State it holds | A reader reaches it |
+|---|---|---|---|
+| flight sink | build machine | session JSONL | no |
+| `00`-`25` pipeline SQL | build machine | DuckDB file, curated Parquet | no |
+| `30_load_postgres.py` | build machine | PostgreSQL | no |
+| `40_export.py` | build machine | nothing, it prints | no |
+| static bundle | GitHub Pages | HTML, JavaScript, Parquet | yes, read only |
+| DuckDB WebAssembly | reader's browser tab | tables in tab memory | yes |
+| query box, `/explore` | reader's browser tab | the reader's own SQL | yes |
+
+Two properties follow from that table, and both matter.
+
+No server executes a reader's query. DuckDB compiles to WebAssembly and runs
+inside the tab, so a query needs no endpoint and no credentials. Those tables
+live in that tab and die with it.
+
+The published Parquet forms the only contract between the two halves. The build
+machine writes it, the browser reads it. Neither side shares a process, a
+connection or a secret with the other.
+
+`docs/adr/0001-query-the-warehouse-in-the-browser.md` records the sizing that
+makes this practical, and the point where it stops being practical.
+
 ---
 
 ## 3. Object Inventory
