@@ -143,7 +143,7 @@ display(Inputs.table(chars));
 
 ## 4. How do the boss fights end?
 
-No column here claims a boss died at the player hands. The recorder emits
+No column here claims a boss died at the player's hands. The recorder emits
 no defeat event, and the `win` state never occurs in this sample. So the pipeline reports the state
 that followed each fight, and calls a reward screen `progressed`. That is the
 closest available proxy for a defeat, and it is a proxy rather than evidence.

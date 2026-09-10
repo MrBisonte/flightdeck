@@ -18,7 +18,17 @@ A page reports four clocks. The page writes three of them. The server writes one
 
 The pipeline orders every record on `srv`. It treats the other clocks as claims, and checks them.
 
+<div class="only-engineering">
+
 Every number on this page is the result of a query. The query sits above its result.
+
+</div>
+<div class="only-dashboard">
+
+Every number on this page is the result of a query. The queries are hidden in
+this view. Switch to Engineering, top right, to read them.
+
+</div>
 
 ## 1. Do the clocks agree?
 
@@ -42,7 +52,7 @@ display(html`<div class="grid grid-cols-4">
 </div>`);
 ```
 
-The page clock and the server clock agree to within ${skew.get(0).max_ms} ms. The pipeline measures this. It does not assume it.
+The page clock and the server clock agree to within ${skew.get(0).max_ms} ms. The pipeline measures that rather than assuming it.
 
 ## 2. Gaps between arrivals
 

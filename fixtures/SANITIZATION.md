@@ -68,5 +68,5 @@ Only one error record shows a real defect.
 | Session B | `Uncaught TypeError ... reading 'length'` | A real crash |
 | Session A | `Uncaught Error: flight-recorder self-test` | A deliberate test |
 
-The self-test proves the error hook works. It stays in the fixture. Removal
-would misrepresent the session.
+The self-test proves the error hook works. It stays in the fixture, because
+removing it would misrepresent the session.
