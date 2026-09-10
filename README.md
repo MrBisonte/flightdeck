@@ -126,8 +126,8 @@ Engineering prints each query above its result. Dashboard hides the SQL and
 restyles the page for a reader who wants the answer. Neither view recomputes
 anything, so the two cannot disagree.
 
-The site goes live at https://mrbisonte.github.io/flightdeck/ when this
-repository becomes public.
+The site is live at https://mrbisonte.github.io/flightdeck/. A push to `main`
+rebuilds it, and a weekly cron rebuilds it on Mondays.
 
 ## Three rules this repository follows
 
