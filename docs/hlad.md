@@ -1,4 +1,4 @@
-# flightdeck — High-Level Architecture Document
+# flightdeck: High-Level Architecture Document
 
 Version: 1.0   Status: Draft   Date: 2026-09-09
 Author: alex   Reviewers: none
@@ -34,7 +34,9 @@ flowchart LR
   landed --> quarantine[(quarantine)]
   clean --> entities[(entity tables)]
   entities --> curated[curated views]
+  entities --> gold[gold dimensions and facts]
   curated --> published[(curated Parquet)]
+  gold --> published
   curated --> postgres[(PostgreSQL)]
   published --> site([site])
   published --> exporters([exporters])
@@ -50,10 +52,11 @@ flowchart LR
 | 6 | `10_typed.sql` defines `clean` | `landed`, `quarantine` | `clean` view | `clean` is `landed` minus `quarantine` |
 | 7 | `10_typed.sql` unnests `clean` into eight entities | `clean` | 8 tables | Four nested columns flatten into child rows |
 | 8 | `20_curated.sql` defines eleven views | entities | views | Every business number lives here, and only here |
-| 9 | `25_publish.sql` copies fifteen relations to Parquet | views, tables | `warehouse/curated/*.parquet` | ZSTD compression |
-| 10 | `30_load_postgres.py` loads twelve relations | Parquet | PostgreSQL | An explicit relation list, no globbing |
-| 11 | `40_export.py` prints payloads in three formats | Parquet | stdout, files | The exporter makes no network call |
-| 12 | The site queries the Parquet in the browser | Parquet | rendered page | The site holds no query the pipeline holds |
+| 9 | `22_gold.sql` builds thirteen dimensions and facts | entities, reference views | tables | The run grain, which a page load does not give |
+| 10 | `25_publish.sql` copies 22 relations to Parquet | views, tables | `warehouse/curated/*.parquet` | ZSTD compression |
+| 11 | `30_load_postgres.py` loads twelve relations | Parquet | PostgreSQL | An explicit relation list, no globbing |
+| 12 | `40_export.py` prints payloads in three formats | Parquet | stdout, files | The exporter makes no network call |
+| 13 | The site queries the Parquet in the browser | Parquet | rendered page | The site holds no query the pipeline holds |
 
 > **Warning.** Step 4 is the subtle one. A session file is not a page load. The
 > sink writes one file per dev server run. One file holds every page load of that
@@ -133,7 +136,7 @@ same data, so a wider range is possible in production.
 | `ref_modes` | view | 3 | one documented mode |
 | `ref_chars` | view | 5 | one documented character |
 | `ref_bosses` | view | 4 | one documented boss |
-| `contract_caps` | table | 3 | one cap |
+| `contract_caps` | table | 5 | one cap |
 
 ### 3.2 Columns, by unit family
 
@@ -535,7 +538,7 @@ still add up. That is the point of the quarantine relation.
 
 ---
 
-## Appendix A — Glossary
+## Appendix A. Glossary
 
 | Term | Definition |
 |---|---|

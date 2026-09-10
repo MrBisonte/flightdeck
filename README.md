@@ -1,6 +1,6 @@
 # flightdeck
 
-A medallion pipeline over real browser game telemetry.
+A medallion pipeline over telemetry from a real browser game.
 
 ```
    JSONL  -->  Parquet  -->  typed model  -->  curated views  -->  PostgreSQL
@@ -45,7 +45,8 @@ Run one step at a time with a step name:
 ./demo.sh curated
 ```
 
-Steps: `check`, `raw`, `typed`, `curated`, `publish`, `load`, `export`.
+Steps: `check`, `raw`, `typed`, `curated`, `gold`, `publish`, `load`,
+`export`. `build` runs the five steps that write the warehouse.
 
 ## The idea
 
@@ -60,8 +61,8 @@ The pipeline partitions and orders on `srv`. It treats the other three clocks as
 claims to check.
 
 That one decision separates a page that went quiet from a page that was wrong.
-It is how the pipeline sorts 20 background-tab stalls from the 1 stall that
-throttling does not explain.
+It is how the pipeline sorts 20 stalls in a background tab from the 1 stall
+that throttling does not explain.
 
 ## What it answers
 
@@ -75,6 +76,8 @@ throttling does not explain.
 | `loss_accounting` | How much telemetry did the system lose? |
 | `dimension_coverage` | Which documented values did nobody play? |
 | `quarantine` | Which records failed the contract, and why? |
+| `fact_run` | What happened in one run, at the run grain rather than the page load? |
+| `character_usage` | Which characters do players pick, and how many kills do they get? |
 
 ## Layout
 
@@ -84,11 +87,12 @@ throttling does not explain.
 | `contracts/wire_schema.jsonl` | One record of each kind. Fixes the column set |
 | `fixtures/raw/` | Three real sessions, sanitized |
 | `fixtures/reference/` | The documented domain, as CSV. The second source |
-| `pipeline/` | The six pipeline steps, in order |
+| `pipeline/` | The seven pipeline steps, in order |
 | `scripts/` | The sanitizer, a credential scan, an STE doc check |
 | `site/` | The analytics site over the curated Parquet |
-| `docs/architecture.md` | End to end, data flows, topology |
-| `docs/hlad.md` | The relational model: objects, units, keys, worked records |
+| `docs/architecture.md` | End to end, data flows, ownership |
+| `docs/hlad.md` | The relational model: objects, units, keys, runtime topology, worked records |
+| `docs/adr/` | One file per decision that would otherwise need re-arguing |
 | `docs/runbook-export.md` | Human setup for sending telemetry to a backend |
 | `docs/defect-log.md` | Every defect found while building this, and its fix |
 | `demo.sh` | Every step, one command |
@@ -96,8 +100,9 @@ throttling does not explain.
 ## The site
 
 The curated Parquet also feeds a static site, built with Observable Framework.
-Every number on a page is the result of a query, printed above its result. The
-site holds no query that the pipeline holds. It reads what `./demo.sh build`
+Every number on a page is the result of a query, and the engineering view
+prints that query above its result. The site holds no query that the pipeline
+holds. It reads what `./demo.sh build`
 published, and nothing else.
 
 Run it locally:
@@ -106,8 +111,15 @@ Run it locally:
 npm install --prefix site && npm run dev --prefix site
 ```
 
-Pages today: Start here, Overview, Four clocks, and The game. Start here is
-the introduction. Overview is the dashboard. The game reads the gold layer.
+Pages today: Start here, Overview, Four clocks, The game, and Explore. Start
+here is the introduction. Overview is the dashboard. The game reads the gold
+layer. Explore runs the reader's own SQL.
+
+DuckDB compiles to WebAssembly and runs inside the reader's tab, so Explore
+needs no server to answer a query. It declares every published table, lists
+their columns from `duckdb_columns()`, and runs whatever the reader types.
+[docs/adr/0001-query-the-warehouse-in-the-browser.md](docs/adr/0001-query-the-warehouse-in-the-browser.md)
+records the sizing that makes this work.
 
 Every page has two views, switched from the control in the top right.
 Engineering prints each query above its result. Dashboard hides the SQL and

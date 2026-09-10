@@ -1,4 +1,4 @@
-# ADR 0001 — Query the warehouse in the reader's browser
+# ADR 0001. Query the warehouse in the reader's browser
 
 | Field | Value |
 |---|---|
@@ -53,8 +53,8 @@ table at once. A page that declares twenty-two tables pulls twenty-two files.
 > a four kilobyte block, which reports this warehouse as 100 kB, more than twice
 > its real size.
 
-Three fixture sessions produce this warehouse. The whole thing is smaller than a
-single web font, so eager loading costs less than range requests would.
+Three fixture sessions produce this warehouse. It is smaller than a single web
+font, so eager loading costs less than range requests would.
 
 ## 3. Decision
 
@@ -86,9 +86,9 @@ DuckDB executes that SQL in the reader's tab. No query reaches a server.
 - Every page listing a table pays for that table. `/explore` therefore carries
   the largest front matter block on the site.
 
-### Revisit when
+### Triggers to revisit
 
-Either trigger is enough:
+Either one is enough:
 
 - Total curated bytes pass roughly ten million. The eager load then becomes a
   real page-load cost, and `/explore` should register tables on demand.
