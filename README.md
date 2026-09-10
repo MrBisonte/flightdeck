@@ -4,7 +4,7 @@ A medallion pipeline over real browser game telemetry.
 
 ```
    JSONL  -->  Parquet  -->  typed model  -->  curated views  -->  PostgreSQL
-   raw log     partitioned   under a         analytics           and PostHog
+   raw log     partitioned   under a         analytics           and exporters
                              contract
 ```
 
@@ -45,7 +45,7 @@ Run one step at a time with a step name:
 ./demo.sh curated
 ```
 
-Steps: `check`, `raw`, `typed`, `curated`, `publish`, `load`, `posthog`.
+Steps: `check`, `raw`, `typed`, `curated`, `publish`, `load`, `export`.
 
 ## The idea
 
@@ -86,16 +86,43 @@ throttling does not explain.
 | `fixtures/reference/` | The documented domain, as CSV. The second source |
 | `pipeline/` | The six pipeline steps, in order |
 | `scripts/` | The sanitizer, a credential scan, an STE doc check |
+| `site/` | The analytics site over the curated Parquet |
 | `docs/architecture.md` | End to end, data flows, topology |
+| `docs/hlad.md` | The relational model: objects, units, keys, worked records |
+| `docs/runbook-export.md` | Human setup for sending telemetry to a backend |
 | `docs/defect-log.md` | Every defect found while building this, and its fix |
 | `demo.sh` | Every step, one command |
+
+## The site
+
+The curated Parquet also feeds a static site, built with Observable Framework.
+Every number on a page is the result of a query, printed above its result. The
+site holds no query that the pipeline holds. It reads what `./demo.sh build`
+published, and nothing else.
+
+Run it locally:
+
+```bash
+npm install --prefix site && npm run dev --prefix site
+```
+
+Pages today: Start here, Overview, Four clocks, and The game. Start here is
+the introduction. Overview is the dashboard. The game reads the gold layer.
+
+Every page has two views, switched from the control in the top right.
+Engineering prints each query above its result. Dashboard hides the SQL and
+restyles the page for a reader who wants the answer. Neither view recomputes
+anything, so the two cannot disagree.
+
+The site goes live at https://mrbisonte.github.io/flightdeck/ when this
+repository becomes public.
 
 ## Three rules this repository follows
 
 | Rule | Result |
 |---|---|
 | **Drop nothing** | A bad record moves to `quarantine` with a reason. The counts reconcile |
-| **Make no network calls** | The PostHog exporter prints its batch and exits. It reads no key |
+| **Make no network calls** | The exporter prints its payloads and exits. It reads no token |
 | **Claim only what runs** | Snowflake stays a documented path. The demo needs no external service |
 
 ## License

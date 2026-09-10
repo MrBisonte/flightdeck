@@ -45,7 +45,10 @@ def test_span_enum_is_the_six_frame_sections_in_order():
     assert CONTRACT["enums"]["span"] == ["sim", "tiles", "fog", "bodies", "vignette", "hud"]
 
 
-@pytest.mark.parametrize("cap_key", ["events_per_beat", "events_per_bye", "trace_frames"])
+# Every cap the contract declares, not a list repeated here. A hardcoded list is
+# how two caps reached the YAML and never reached the warehouse: the test only
+# checked the three it already knew about.
+@pytest.mark.parametrize("cap_key", sorted(CONTRACT["caps"]))
 def test_sql_constant_matches_contract_cap(cap_key):
     """The caps are a table in the warehouse. They must equal the YAML."""
     match = re.search(rf"\('{cap_key}',\s*(\d+)\)", TYPED_SQL)

@@ -32,18 +32,27 @@ CREATE OR REPLACE VIEW ref_bosses AS SELECT * FROM read_csv('fixtures/reference/
 -- Mirrored from contracts/flight_log.yml, which is the source of truth.
 -- tests/test_contract.py asserts these agree.
 CREATE OR REPLACE TABLE contract_caps (name VARCHAR, value BIGINT);
+-- Every cap the contract declares, not only the ones a check happens to use.
+-- A cap that never reaches the warehouse is a rule no query can test, and
+-- logger_ring_capacity and sink_body_bytes sat in the YAML alone until the
+-- contract test started deriving its parameters from the YAML itself.
 INSERT INTO contract_caps VALUES
-    ('events_per_beat', 400),
-    ('events_per_bye',  100),
-    ('trace_frames',    120);
+    ('events_per_beat',       400),
+    ('events_per_bye',        100),
+    ('trace_frames',          120),
+    ('logger_ring_capacity',  500),
+    ('sink_body_bytes',   1000000);
 
 CREATE OR REPLACE MACRO cap(n) AS (SELECT value FROM contract_caps WHERE name = n);
 
 CREATE OR REPLACE VIEW landed AS
 SELECT
     *,
-    sum(CASE WHEN kind = 'hello' THEN 1 ELSE 0 END)
-        OVER (PARTITION BY session_id ORDER BY srv ROWS UNBOUNDED PRECEDING) AS page_load_seq,
+    -- INTEGER, not the HUGEINT a window sum returns by default. A HUGEINT lands
+    -- as DOUBLE in Parquet, so every consumer downstream has to cast it back.
+    CAST(sum(CASE WHEN kind = 'hello' THEN 1 ELSE 0 END)
+        OVER (PARTITION BY session_id ORDER BY srv ROWS UNBOUNDED PRECEDING) AS INTEGER)
+        AS page_load_seq,
     coalesce(cid, session_id || '#' || CAST(
         sum(CASE WHEN kind = 'hello' THEN 1 ELSE 0 END)
             OVER (PARTITION BY session_id ORDER BY srv ROWS UNBOUNDED PRECEDING) AS VARCHAR))
@@ -248,3 +257,20 @@ SELECT (SELECT count(*) FROM landed)                               AS landed_rec
        (SELECT count(*) FROM quarantine)                           AS quarantine_rows_all,
        (SELECT count(*) FROM clean) + (SELECT count(*) FROM quarantine WHERE relation = 'landed')
          = (SELECT count(*) FROM landed)                           AS reconciles;
+
+--------------------------------------------------------------------------------
+-- Warehouse manifest, so a reader can tell fresh data from a fresh build.
+--
+-- A site can always report when it was built. Without this, it cannot report
+-- when the data last arrived, and a stale warehouse behind a new build looks
+-- current. srv is the server receive time, the only clock the page cannot write.
+--
+-- sessions counts page loads, not files, which is the grain session_summary
+-- uses. Two grains on one site would print two different session counts.
+--------------------------------------------------------------------------------
+CREATE OR REPLACE VIEW warehouse_manifest AS
+SELECT count(*)                                           AS records,
+       count(DISTINCT session_id || '#' || page_load_seq) AS sessions,
+       min(srv)                                           AS first_srv,
+       max(srv)                                           AS last_srv
+FROM clean;
