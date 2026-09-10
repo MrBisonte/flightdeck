@@ -106,9 +106,16 @@ Run it locally:
 npm install --prefix site && npm run dev --prefix site
 ```
 
-Pages today: Start here, Overview, and Four clocks. Start here is the
-introduction. Overview is the dashboard. The site goes live at
-https://mrbisonte.github.io/flightdeck/ when this repository becomes public.
+Pages today: Start here, Overview, Four clocks, and The game. Start here is
+the introduction. Overview is the dashboard. The game reads the gold layer.
+
+Every page has two views, switched from the control in the top right.
+Engineering prints each query above its result. Dashboard hides the SQL and
+restyles the page for a reader who wants the answer. Neither view recomputes
+anything, so the two cannot disagree.
+
+The site goes live at https://mrbisonte.github.io/flightdeck/ when this
+repository becomes public.
 
 ## Three rules this repository follows
 
