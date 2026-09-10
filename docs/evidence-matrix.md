@@ -80,8 +80,8 @@ exposes a latched key. All four alarms in these fixtures show `heldKeys: []`.
 
 The ring never overflowed. Peak use was 32 events against a cap of 400.
 
-The mechanism is real. The number is checkable. This data does not show the
-pipeline catching a loss.
+The mechanism is real and the number is checkable, but this data does not show
+the pipeline catching a loss.
 
 **Position:** the claim is "proven zero", not "caught loss".
 
