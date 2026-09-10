@@ -1,13 +1,12 @@
 # How the system works
 
-This page explains the system from end to end. It shows the topology, the data
-flows, and the process.
+The topology, the data flows, and the process, end to end.
 
 Every step on this page runs today. Use `./demo.sh` to run all of them.
 
 ## Words used on this page
 
-One word has one meaning. This table fixes each meaning.
+One word has one meaning.
 
 | Word | Meaning |
 |---|---|
@@ -40,7 +39,8 @@ flowchart TB
     raw[("RAW<br/>Parquet, partitioned")]
     typed[("TYPED<br/>8 relations + quarantine")]
     cur[("CURATED<br/>11 views")]
-    raw --> typed --> cur
+    gold[("GOLD<br/>dimensions and facts,<br/>at the run grain")]
+    raw --> typed --> cur --> gold
   end
 
   subgraph D["4. CONSUMERS"]
@@ -53,12 +53,10 @@ flowchart TB
   rec -.->|"alarm, err, bye: sendBeacon"| sink
   log --> raw
   ref[("reference CSV")] --> typed
-  cur --> pg
-  cur --> ph
-  cur --> site
+  gold --> pg
+  gold --> ph
+  gold --> site
 ```
-
-Read the dotted arrow carefully. It is important.
 
 - A beat uses `fetch`.
 - An alarm, an error, and a goodbye use `sendBeacon`.
@@ -81,12 +79,12 @@ Each stage has one owner. Data moves in one direction only.
 | Structure | Pipeline, this repository | Type the data. Apply the contract |
 | Read | PostgreSQL, the exporters, the site | Read only. Never write back |
 
-The sink is the only writer of a session file. No consumer writes back.
-Therefore no stage can change what the recorder captured.
+The sink is the only writer of a session file and no consumer writes back, so
+nothing downstream can change what the recorder sent.
 
 ## The four clocks
 
-This idea carries the whole design. Read this section slowly.
+This idea carries the whole design.
 
 Each record holds up to four clocks.
 
@@ -97,8 +95,8 @@ Each record holds up to four clocks.
 | `timestamp` | The page | **No.** Same reason |
 | `srv` | The server | **YES.** The page cannot change it |
 
-The pipeline partitions on `srv`. The pipeline orders on `srv`. The pipeline
-compares the other three clocks against `srv`.
+The pipeline partitions and orders on `srv`, then compares the other three
+clocks against it.
 
 ```
     page says     "the time is 14:58:31.194"
@@ -117,7 +115,7 @@ compares the other three clocks against `srv`.
 | Largest difference | 9 ms |
 | Mean difference | 0.92 ms |
 
-The clocks agree. The pipeline now measures this fact. It does not assume it.
+The clocks agree. The pipeline measures that rather than assuming it.
 
 ### Question 2: when did the page stop, and why?
 
@@ -129,8 +127,6 @@ joins each gap to the tab visibility at that moment.
 | Background tab. The browser slowed the timer | 20 | 60.0s |
 | Tab hidden. The machine slept | 4 | 17364.8s |
 | **Tab visible. Throttling does not explain it** | **1** | **472.2s** |
-
-Read the result this way:
 
 ```
    20 gaps of ~60s while hidden   ->  normal browser behaviour
@@ -161,8 +157,8 @@ The pipeline builds the real key in two ways:
 | New | `cid`, minted by the recorder | `true` |
 | Old | Count of `hello` records in the file | `false` |
 
-The fixtures use the old format. Live captures use the new format. The pipeline
-reads both. `tests/test_schema_evolution.py` proves this.
+The fixtures use the old format and live captures use the new one. The pipeline
+reads both, which `tests/test_schema_evolution.py` proves.
 
 ## What happens to a bad record
 
@@ -175,8 +171,8 @@ flowchart LR
   quar --> out2["shipped with<br/>the curated layer"]
 ```
 
-The pipeline drops nothing. A bad record moves to `quarantine`. Each quarantine
-row carries the reason.
+The pipeline drops nothing. A bad record moves to `quarantine`, and each row
+there carries the reason.
 
 The counts must reconcile:
 
@@ -186,8 +182,8 @@ The counts must reconcile:
 
 CI fails the build when this equation breaks.
 
-Quarantine ships with the curated data. A consumer must see what the pipeline
-held back. Otherwise the consumer cannot judge the answer.
+Quarantine ships with the curated data, because a consumer who cannot see what
+the pipeline held back cannot judge the answer.
 
 ### The one real quarantine row
 
@@ -197,12 +193,12 @@ held back. Otherwise the consumer cannot judge the answer.
 | Record | A `bye` |
 | Cause | The page outlived the dev server |
 
-The dev server restarted. The sink opened a new file. The old page then sent its
-goodbye into that new file. The new file never saw the matching `hello`.
+The dev server restarted and the sink opened a new file. The old page sent its
+goodbye into that new file, which never saw the matching `hello`.
 
 ## Where the frame times come from
 
-Two sources supply frame times. The difference matters.
+Two sources supply frame times, and the difference matters.
 
 | Source | Rows | Shape | Use |
 |---|---|---|---|
@@ -241,8 +237,8 @@ The pipeline checks for loss in two independent ways.
 1. Read the `dropped` counter that the recorder reports.
 2. Find gaps in the event id sequence.
 
-The second check is the stronger one. The source assigns each event id. The ids
-run without gaps inside one page load. Therefore a missing id proves a loss.
+The second check is the stronger one. The source assigns each event id and the
+ids run without gaps inside one page load, so a missing id proves a loss.
 
 | Measure | Value |
 |---|---|
@@ -252,8 +248,7 @@ run without gaps inside one page load. Therefore a missing id proves a loss.
 | Cap | 400 |
 | Headroom used | 8% |
 
-The ring never came close to its limit. This is the honest result. The mechanism
-makes the result checkable.
+The ring never came close to its limit, and the mechanism makes that checkable.
 
 ## One curated layer, three consumers
 
@@ -263,8 +258,8 @@ makes the result checkable.
                         +--> the site, queried in the browser
 ```
 
-Each consumer reads the same Parquet files. None reads the DuckDB database. None
-reads the raw log. A fourth consumer needs a reader only.
+Each consumer reads the same Parquet files. None reads the DuckDB database or
+the raw log, so a fourth consumer needs a reader only.
 
 ## Lineage: one log file to one database table
 
@@ -275,7 +270,8 @@ flowchart LR
   ref[("fixtures/reference")] --> typed
   rawp -->|10_typed| typed[("sessions, beats, pulses,<br/>events, alarms, blockers,<br/>errors, spans")]
   typed -->|20_curated| cur["11 views"]
-  cur -->|25_publish| cparq[("warehouse/curated")]
+  cur -->|22_gold| gold["dimensions and facts"]
+  gold -->|25_publish| cparq[("warehouse/curated")]
   cparq -->|30_load_postgres| pg[("postgres<br/>curated.*")]
   cparq -->|40_export| ph["OTLP, CloudEvents"]
   cparq -->|site loader| web["site pages"]
@@ -289,13 +285,14 @@ flowchart LR
 | 2 | `./demo.sh raw` | Land the Parquet |
 | 3 | `./demo.sh typed` | Apply the contract |
 | 4 | `./demo.sh curated` | Build the views |
-| 5 | `./demo.sh publish` | Write the curated Parquet |
-| 6 | `./demo.sh load` | Load PostgreSQL |
-| 7 | `./demo.sh export` | Print the export payloads |
+| 5 | `./demo.sh gold` | Build the dimensions and facts |
+| 6 | `./demo.sh publish` | Write the curated Parquet |
+| 7 | `./demo.sh load` | Load PostgreSQL |
+| 8 | `./demo.sh export` | Print the export payloads |
 
-Use `./demo.sh` to run all seven steps. The full run takes 3 to 5 seconds.
+Use `./demo.sh` to run all eight steps. The full run takes 3 to 5 seconds.
 
-Use `./demo.sh build` to run steps 1 to 5 only.
+Use `./demo.sh build` to run steps 2 to 6, the ones that write the warehouse.
 
 ## The two safety behaviours
 
@@ -306,8 +303,8 @@ Use `./demo.sh build` to run steps 1 to 5 only.
    ./demo.sh               reads the fixtures
 ```
 
-Remove the flag to return to the fixtures. The live path creates no extra state.
-Therefore nothing needs a reset.
+Remove the flag to return to the fixtures. The live path creates no extra
+state, so nothing needs a reset.
 
 ### Docker is down
 
@@ -321,8 +318,7 @@ The load step tests the Docker daemon first.
 The real load writes 12 relations and 84 rows into schema `curated`. Verified
 against PostgreSQL 17.
 
-A silent fallback would mislead an audience. Therefore the fallback announces
-itself.
+A silent fallback would mislead an audience, so the fallback announces itself.
 
 ## What the fixtures hold
 
@@ -342,8 +338,8 @@ The two error records differ:
 | `Uncaught TypeError ... reading 'length'` | A real crash |
 | `Uncaught Error: flight-recorder self-test` | A deliberate test |
 
-The self-test record stays in the fixture. Removal would misrepresent the
-session.
+The self-test record stays in the fixture, because removing it would
+misrepresent the session.
 
 ### The crash, as the data shows it
 
@@ -356,8 +352,8 @@ session.
 ```
 
 Two different code paths wrote those two records. The exception stopped the
-frame loop. The watchdog then raised the alarm. The interval is the time to
-detection.
+frame loop and the watchdog then raised the alarm, so the interval is the time
+to detection.
 
 Use the `incident_timeline` view to see this.
 

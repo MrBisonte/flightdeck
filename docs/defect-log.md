@@ -1,7 +1,7 @@
 # Defect log
 
-This page records every defect found while building this repository. It records
-what broke, why, and what fixed it.
+Every defect found while building this repository: what broke, why, and what
+fixed it.
 
 The log exists because a pipeline that claims to find problems in other people's
 data has to account for the problems in its own build. This log lists twelve
@@ -23,7 +23,7 @@ defects. All twelve are closed.
 
 ## Which control caught what
 
-This is the useful part of the table. It shows which control earned its place.
+The table shows which control earned its place.
 
 | Found by | Count | Defects |
 |---|---|---|
@@ -41,8 +41,8 @@ This is the useful part of the table. It shows which control earned its place.
    review          ->  1 defect    found only by a second reader
 ```
 
-Two defects, DEF-08 and DEF-09, were reachable only by running a live capture.
-No test found them. That is the argument for rehearsing rather than assuming.
+Only a live capture reached DEF-08 and DEF-09, and no test found them. That is
+the argument for rehearsing rather than assuming.
 
 ## The register
 
