@@ -22,35 +22,42 @@
 --    never occurs in the fixtures. So a boss encounter carries the state that
 --    followed it, and nothing here claims a kill. See the outcome CASE below.
 --
--- Slowly changing dimensions: every dimension here is Type 1, overwrite. The
--- reference CSVs are rebuilt from source on every run and carry no history, so
--- a Type 2 with valid_from and valid_to would be scaffolding around data that
--- has never changed. The place that will need Type 2 first is the contract, not
--- these dimensions: a quarantine decision taken under events_per_beat = 400
--- cannot be reproduced once that number moves. Tracked in docs/hlad.md.
+-- Slowly changing dimensions. Two kinds live here, and the split is deliberate.
+--
+-- A dimension whose value decided something keeps its history. A quarantine
+-- decision taken under events_per_beat = 400 cannot be reproduced once that
+-- number moves, and a run labelled "archer, fast glass cannon" cannot be read
+-- back once the playbook rewrites that line. Those are Type 2.
+--
+-- app_states and modes are rebuilt from source, Type 1. Nothing published names
+-- a mode, and app_states carries two flags rather than a description, so it
+-- needs its own table and its own decision. Both are noted in docs/hlad.md.
+--
+-- valid_from here is transaction time: the moment this pipeline first saw the
+-- value, not the moment it became true in the game. The reference CSVs carry no
+-- dates, so no other reading is available from them. One consequence is worth
+-- stating plainly rather than discovering later. An as-of join against a fact's
+-- own timestamp is not supported, because every version starts after every fact
+-- in this warehouse. Facts join the current version, which is what dim_character
+-- and dim_boss already hand them.
 
 --------------------------------------------------------------------------------
--- Dimensions. Type 1, straight from the second source.
+-- Type 1 dimensions. Straight from the second source, overwritten every run.
 --------------------------------------------------------------------------------
-CREATE OR REPLACE TABLE dim_character AS
-SELECT "char" AS character_key, note AS description FROM ref_chars;
-
 CREATE OR REPLACE TABLE dim_mode AS
 SELECT mode AS mode_key, note AS description FROM ref_modes;
-
-CREATE OR REPLACE TABLE dim_boss AS
-SELECT boss AS boss_key, note AS description FROM ref_bosses;
 
 CREATE OR REPLACE TABLE dim_app_state AS
 SELECT state AS state_key, is_run_state, in_run, note AS description FROM ref_states;
 
 --------------------------------------------------------------------------------
--- dim_contract_cap. Type 2, and the only Type 2 in this warehouse.
+-- dim_member. Type 2, every versioned reference member in one table.
 --
--- Every other dimension is rebuilt from source, because none of them decides
--- anything. This one does. A record moved to quarantine because a cap said so,
--- and once that cap changes, the decision becomes unreproducible unless the old
--- value survives somewhere. So the cap keeps its history and the rest do not.
+-- Characters and bosses have the same shape, a key and a description, so they
+-- share one table and the dimension name is a column. Three passes written once
+-- beat the same three passes written twice. Nothing downstream reads this table:
+-- each dimension keeps its own view below, so a join stays a join against
+-- dim_character rather than a filter a caller has to remember.
 --
 -- CREATE TABLE IF NOT EXISTS, never CREATE OR REPLACE. Replacing it every run
 -- would delete the history it exists to hold. demo.sh removes warehouse/raw and
@@ -58,9 +65,102 @@ SELECT state AS state_key, is_run_state, in_run, note AS description FROM ref_st
 -- flightdeck.duckdb by hand still resets the history, which no design here can
 -- prevent.
 --
--- Type 2 needs two passes. One statement cannot both close the old row and open
--- the new one for the same key, because WHEN MATCHED updates the row it
+-- Type 2 needs two passes at least. One statement cannot both close the old row
+-- and open the new one for the same key, because WHEN MATCHED updates the row it
 -- matched. Anything that looks like one statement is hiding the second.
+--------------------------------------------------------------------------------
+CREATE OR REPLACE VIEW ref_members AS
+SELECT 'character' AS dimension, "char" AS member_key, note AS description FROM ref_chars
+UNION ALL
+SELECT 'boss', boss, note FROM ref_bosses;
+
+CREATE TABLE IF NOT EXISTS dim_member (
+    dimension   VARCHAR,
+    member_key  VARCHAR,
+    description VARCHAR,
+    version_seq INTEGER,
+    valid_from  TIMESTAMP WITH TIME ZONE,
+    valid_to    TIMESTAMP WITH TIME ZONE,
+    is_current  BOOLEAN
+);
+
+-- Pass 1. Close the current row of any member whose description moved.
+MERGE INTO dim_member AS t
+USING ref_members AS s
+   ON t.dimension = s.dimension AND t.member_key = s.member_key AND t.is_current
+WHEN MATCHED AND t.description IS DISTINCT FROM s.description
+  THEN UPDATE SET valid_to = now(), is_current = false;
+
+-- Pass 2. Close any member the playbook no longer lists. A character that was
+-- withdrawn still described the runs it was played in.
+UPDATE dim_member AS t
+   SET valid_to = now(), is_current = false
+ WHERE t.is_current
+   AND NOT EXISTS (
+       SELECT 1 FROM ref_members s
+        WHERE s.dimension = t.dimension AND s.member_key = t.member_key
+   );
+
+-- Pass 3. Open a row for every member without a current one. That covers a new
+-- member and a member pass 1 just closed, in the same statement. version_seq
+-- counts from the whole history of that member, so a reopened key continues its
+-- numbering instead of restarting at one.
+INSERT INTO dim_member
+SELECT s.dimension,
+       s.member_key,
+       s.description,
+       1 + coalesce((SELECT max(h.version_seq) FROM dim_member h
+                      WHERE h.dimension = s.dimension
+                        AND h.member_key = s.member_key), 0),
+       now(),
+       NULL,
+       true
+FROM ref_members s
+WHERE NOT EXISTS (
+    SELECT 1 FROM dim_member t
+     WHERE t.dimension = s.dimension AND t.member_key = s.member_key AND t.is_current
+);
+
+-- The current version of each dimension, with the columns every consumer here
+-- already reads. The version columns are deliberately absent: a join that wants
+-- one row per character must not have to filter for it.
+--
+-- Tables and not views, so that a database built before dim_member existed is
+-- replaced rather than refused. CREATE OR REPLACE cannot turn a table into a
+-- view, and these two were tables.
+CREATE OR REPLACE TABLE dim_character AS
+SELECT member_key AS character_key, description
+FROM dim_member WHERE dimension = 'character' AND is_current;
+
+CREATE OR REPLACE TABLE dim_boss AS
+SELECT member_key AS boss_key, description
+FROM dim_member WHERE dimension = 'boss' AND is_current;
+
+-- One change log across both dimensions, published as one file. A reader asking
+-- "what did the playbook say about archer before" reads this and nothing else.
+CREATE OR REPLACE VIEW reference_history AS
+SELECT dimension,
+       member_key,
+       version_seq,
+       description,
+       valid_from,
+       valid_to,
+       is_current,
+       CASE WHEN is_current THEN 'in force' ELSE 'superseded' END AS status
+FROM dim_member
+ORDER BY dimension, member_key, version_seq;
+
+--------------------------------------------------------------------------------
+-- dim_contract_cap. Type 2, on its own, for one reason.
+--
+-- A cap is a number and a member is a description, so folding the cap into
+-- dim_member would mean storing 400 as text. The passes below are the same three
+-- passes, kept separate to keep the column a BIGINT. Two implementations is the
+-- price of that, and the second one is where any third belongs.
+--
+-- The history matters because the cap decided something. A record moved to
+-- quarantine because a cap said so, and once that cap changes the decision
+-- becomes unreproducible unless the old value survives somewhere.
 --------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS dim_contract_cap (
     cap_key    VARCHAR,
