@@ -299,7 +299,7 @@ Use `./demo.sh build` to run steps 2 to 6, the ones that write the warehouse.
 ### Live capture
 
 ```
-   ./demo.sh --live DIR    reads DIR, newest file wins
+   ./demo.sh --live DIR    reads DIR, latest filename wins
    ./demo.sh               reads the fixtures
 ```
 
