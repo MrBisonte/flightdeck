@@ -23,7 +23,7 @@ Each claim on this page maps to one of three things:
 | Conformed dimensions | "data quality", "metadata driven ETL" | flightdeck | `fixtures/reference/` joined to the telemetry | `./demo.sh curated` | The coverage table |
 | Slowly changing dimensions | "data quality and lineage" | flightdeck | `dim_member`, Type 2 on characters and bosses, with ADR 0002 for the two that stay Type 1 | `./demo.sh gold` | `reference_history` |
 | Data minimization | "GDPR compliant design in regulated European industries" | flightdeck | `sanitize_flightlog.py`, `SANITIZATION.md` | `python scripts/sanitize_flightlog.py --check fixtures/raw` | The change table |
-| CI and test gating | "CI/CD with automated test gating on every change" | all three | GitHub Actions. 95 tests. CI gates the reconciliation | Open the Actions tab | The badge |
+| CI and test gating | "CI/CD with automated test gating on every change" | all three | GitHub Actions. 98 tests. CI gates the reconciliation | Open the Actions tab | The badge |
 | Evidence based decisions | "shipping working proofs of concept before asking for investment" | crow-archer, flightdeck | `incident_timeline`, then the stack, then PR 42 | `./demo.sh curated` | The log excerpt |
 
 ## The numbers
