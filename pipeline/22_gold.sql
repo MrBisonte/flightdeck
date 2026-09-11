@@ -203,6 +203,53 @@ SELECT cap_key,
 FROM dim_contract_cap
 ORDER BY cap_key, valid_from;
 
+-- reference_governance. One row per versioned dimension, plus a total row.
+--
+-- The governance page shows these as cards, and a page may select and format
+-- but may not aggregate. So the totals live here. GROUPING SETS gives the per
+-- dimension rows and the total from one scan, which keeps the two from ever
+-- disagreeing.
+--
+-- dim_contract_cap joins in through a window rather than a stored column. It
+-- predates version_seq and adding the column would rewrite its history.
+CREATE OR REPLACE VIEW reference_governance AS
+WITH versioned AS (
+    SELECT dimension, member_key, version_seq, valid_from, is_current
+    FROM dim_member
+    UNION ALL
+    SELECT 'contract cap' AS dimension,
+           cap_key        AS member_key,
+           CAST(row_number() OVER (PARTITION BY cap_key ORDER BY valid_from) AS INTEGER)
+                          AS version_seq,
+           valid_from,
+           is_current
+    FROM dim_contract_cap
+),
+rolled AS (
+    SELECT dimension,
+           CAST(grouping(dimension) AS INTEGER)                 AS is_total,
+           CAST(count(DISTINCT member_key) AS INTEGER)          AS members,
+           CAST(count(DISTINCT member_key) FILTER (WHERE is_current) AS INTEGER)
+                                                                AS members_in_force,
+           CAST(count(*) AS INTEGER)                            AS versions,
+           CAST(count(*) FILTER (WHERE NOT is_current) AS INTEGER) AS superseded,
+           max(version_seq)                                     AS deepest_history,
+           min(valid_from)                                      AS first_seen,
+           max(valid_from)                                      AS last_change
+    FROM versioned
+    GROUP BY GROUPING SETS ((dimension), ())
+)
+SELECT coalesce(dimension, 'every dimension') AS dimension,
+       members,
+       members_in_force,
+       versions,
+       superseded,
+       deepest_history,
+       first_seen,
+       last_change
+FROM rolled
+ORDER BY is_total, dimension;
+
 --------------------------------------------------------------------------------
 -- Run segmentation. One home for the window logic, because both facts need it.
 --

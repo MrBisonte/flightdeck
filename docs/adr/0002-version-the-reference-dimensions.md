@@ -85,8 +85,9 @@ text.
 - A reader cannot ask what a run looked like under the playbook of its day. The
   timestamps do not support the question, and pretending otherwise would be
   worse than declining it.
-- One more published file, `reference_history.parquet`, 1,572 bytes. ADR 0001
-  tracks the page-load cost that every published table adds.
+- Two more published files, `reference_history.parquet` and
+  `reference_governance.parquet`, 2,864 bytes together. ADR 0001 tracks the
+  page-load cost that every published table adds.
 
 ### Triggers to revisit
 

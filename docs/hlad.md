@@ -52,8 +52,8 @@ flowchart LR
 | 6 | `10_typed.sql` defines `clean` | `landed`, `quarantine` | `clean` view | `clean` is `landed` minus `quarantine` |
 | 7 | `10_typed.sql` unnests `clean` into eight entities | `clean` | 8 tables | Four nested columns flatten into child rows |
 | 8 | `20_curated.sql` defines eleven views | entities | views | Every business number lives here, and only here |
-| 9 | `22_gold.sql` builds sixteen dimensions, facts and metric views | entities, reference views | tables | The run grain, which a page load does not give |
-| 10 | `25_publish.sql` copies 23 relations to Parquet | views, tables | `warehouse/curated/*.parquet` | ZSTD compression |
+| 9 | `22_gold.sql` builds seventeen dimensions, facts and metric views | entities, reference views | tables | The run grain, which a page load does not give |
+| 10 | `25_publish.sql` copies 24 relations to Parquet | views, tables | `warehouse/curated/*.parquet` | ZSTD compression |
 | 11 | `30_load_postgres.py` loads twelve relations | Parquet | PostgreSQL | An explicit relation list, no globbing |
 | 12 | `40_export.py` prints payloads in three formats | Parquet | stdout, files | The exporter makes no network call |
 | 13 | The site queries the Parquet in the browser | Parquet | rendered page | The site holds no query the pipeline holds |
@@ -422,7 +422,8 @@ decide something that a reader may later need to reproduce?
 `dim_character` and `dim_boss` share one table, `dim_member`, because both hold
 a key and a description. The dimension name is a column. Each keeps its own
 current-version table, so a metric view joins `dim_character` and never a
-filter. `reference_history` publishes every version of both.
+filter. `reference_history` publishes every version of both, and
+`reference_governance` counts them per dimension for the Governance page.
 
 **What `valid_from` means here.** It is transaction time. It records the moment
 the pipeline first saw the value, not the moment the value became true in the
