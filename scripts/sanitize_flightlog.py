@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Sanitize flight recorder logs for public distribution.
 
-Two fields carry environment detail that does not belong in a public repo:
-``ua`` identifies the exact browser build, and ``href`` and the URLs inside
-``stack`` carry the dev server host and port. Everything else is recorded
-telemetry and is left byte for byte as the recorder wrote it.
+Two kinds of environment detail do not belong in a public repo. ``ua``
+identifies the exact browser build, and any http origin carries the dev server
+host and port. The origin scrub walks every string in the record, at any depth,
+because a host reaches the log through more fields than a list can track: an
+exception message, a log line, a nested payload. Paths, line numbers and column
+numbers survive, because they are the evidence.
 
 The script is deterministic and re-runnable: sanitizing an already sanitized
 file is a no-op, which is what makes ``--check`` meaningful.
@@ -45,6 +47,7 @@ FORBIDDEN = (
     (re.compile(r"[A-Za-z]:\\"), "Windows drive path"),
     (re.compile(r"/Users/"), "Unix home path"),
     (re.compile(r"/home/"), "Unix home path"),
+    (re.compile(r"https?://(?!localhost(?::\d+)?(?:[\s/\"')]|$))[^/\s\"')]+"), "non-local origin"),
 )
 
 
@@ -71,13 +74,27 @@ def scrub_origins(text: str) -> str:
     return ORIGIN.sub("http://localhost", text)
 
 
+def scrub_deep(value):
+    """Scrub origins from every string reachable from ``value``.
+
+    Naming the fields to scrub was the earlier design and it leaked. An origin
+    in ``err.msg`` reached three published relations, and an origin inside a
+    nested event body reached the raw layer, because neither field was on the
+    list. Walking the record needs no list to keep current.
+    """
+    if isinstance(value, str):
+        return scrub_origins(value)
+    if isinstance(value, dict):
+        return {k: scrub_deep(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [scrub_deep(v) for v in value]
+    return value
+
+
 def sanitize_record(rec: dict) -> dict:
+    rec = scrub_deep(rec)
     if "ua" in rec:
         rec["ua"] = browser_family(rec["ua"])
-    if "href" in rec:
-        rec["href"] = scrub_origins(rec["href"])
-    if "stack" in rec:
-        rec["stack"] = scrub_origins(rec["stack"])
     return rec
 
 

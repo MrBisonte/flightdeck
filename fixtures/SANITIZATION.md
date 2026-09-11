@@ -3,16 +3,20 @@
 The three files in `raw/` hold real recorded play from 2026-08-30. Nobody
 generated them. Nobody edited them by hand.
 
-The sanitizer rewrites two fields and nothing else. See
+The sanitizer rewrites two kinds of value and nothing else. See
 [`scripts/sanitize_flightlog.py`](../scripts/sanitize_flightlog.py). It runs the
 same way every time.
 
 ```
    original log  -->  sanitizer  -->  committed fixture
                         |
-                        +-- rewrites: ua, href, URLs in stack
-                        +-- keeps:    every other field, byte for byte
+                        +-- rewrites: ua, and every http origin, at any depth
+                        +-- keeps:    every other value, byte for byte
 ```
+
+Naming the fields to rewrite was the earlier design and it leaked. An origin in
+`err.msg` reached three published relations, and an origin inside a nested event
+body reached the raw layer. The scrub now walks the record instead.
 
 ## The changes
 
@@ -20,7 +24,7 @@ same way every time.
 |---|---|---|---|
 | `ua` | The full user agent, with the build | `Chrome` or `Edge` | The build string identifies the exact client |
 | `href` | `http://localhost:8090/` | `http://localhost/` | Removes the dev server port |
-| URLs in `stack` | `http://localhost:8090/src/...` | `http://localhost/src/...` | The same rule, applied consistently |
+| Any http origin, anywhere | `http://192.168.1.50:5173/src/...` | `http://localhost/src/...` | Removes the dev server host and port, wherever it appears |
 
 ## What the sanitizer keeps
 
@@ -38,6 +42,7 @@ gate, not as an afterthought.
 |---|---|
 | Windows drive path, `C:\...` | none found |
 | Unix home path, `/Users/`, `/home/` | none found |
+| An origin whose host is not `localhost` | none found |
 | A cloud folder name, always under one of the above | none found |
 | A browser build token | removed with the user agent |
 | An untrimmed user agent | none remain |
