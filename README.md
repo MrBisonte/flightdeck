@@ -78,6 +78,7 @@ that throttling does not explain.
 | `quarantine` | Which records failed the contract, and why? |
 | `fact_run` | What happened in one run, at the run grain rather than the page load? |
 | `character_usage` | Which characters do players pick, and how many kills do they get? |
+| `reference_history` | What did the playbook say about this character before, and when did it change? |
 
 ## Layout
 
@@ -120,6 +121,9 @@ needs no server to answer a query. It declares every published table, lists
 their columns from `duckdb_columns()`, and runs whatever the reader types.
 [docs/adr/0001-query-the-warehouse-in-the-browser.md](docs/adr/0001-query-the-warehouse-in-the-browser.md)
 records the sizing that makes this work.
+
+[docs/adr/0002-version-the-reference-dimensions.md](docs/adr/0002-version-the-reference-dimensions.md)
+records why two dimensions keep their history and the other two do not.
 
 Every page has two views, switched from the control in the top right.
 Engineering prints each query above its result. Dashboard hides the SQL and

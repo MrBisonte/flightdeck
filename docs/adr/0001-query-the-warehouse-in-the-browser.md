@@ -10,7 +10,7 @@
 
 ## 1. Context
 
-The site publishes twenty-two curated Parquet files. Four pages answer questions
+The site publishes twenty-three curated Parquet files. Four pages answer questions
 the author picked. A reader with a different question had no way to ask it.
 
 Observable Framework already runs DuckDB, compiled to WebAssembly, on every page
@@ -39,18 +39,18 @@ threshold it writes a view instead, and DuckDB then reads byte ranges on demand.
 
 So Framework loads eagerly, not lazily, at every size this project will reach.
 Registration fires on the page's first `sql` call and covers every declared
-table at once. A page that declares twenty-two tables pulls twenty-two files.
+table at once. A page declaring twenty-three tables pulls twenty-three files.
 
 | Measure | Value | How to reproduce |
 |---|---|---|
-| Curated Parquet files | 22 | `ls warehouse/curated/*.parquet` |
-| Total bytes, all files | 44,937 | `ls -l`, fifth column, summed |
+| Curated Parquet files | 23 | `ls warehouse/curated/*.parquet` |
+| Total bytes, all files | 46,500 | `ls -l`, fifth column, summed |
 | Largest file, `spans.parquet` | 11,625 bytes | `ls -l` |
 | Framework's table threshold | 50,000,000 bytes | the snippet above |
-| Warehouse against that threshold | under one tenth of one percent | 44,937 over 50,000,000 |
+| Warehouse against that threshold | under one tenth of one percent | 46,500 over 50,000,000 |
 
 > **Note.** Measure with `ls -l` and not with `du`. `du` rounds every file up to
-> a four kilobyte block, which reports this warehouse as 100 kB, more than twice
+> a four kilobyte block, which reports this warehouse as 116 kB, more than twice
 > its real size.
 
 Three fixture sessions produce this warehouse. It is smaller than a single web
@@ -58,7 +58,7 @@ font, so eager loading costs less than range requests would.
 
 ## 3. Decision
 
-The site gains one page, `/explore`. It declares all twenty-two tables. It
+The site gains one page, `/explore`. It declares every published table. It
 carries two blocks: a catalog query over `duckdb_columns()`, and a text area
 that runs whatever the reader types.
 
@@ -79,7 +79,7 @@ DuckDB executes that SQL in the reader's tab. No query reaches a server.
 
 ### Paid
 
-- The first query on `/explore` materialises all twenty-two tables. At the
+- The first query on `/explore` materialises every declared table. At the
   measured size a reader will not notice. The cost grows with the warehouse.
 - A runaway query, such as a cross join over `spans`, freezes the reader's tab.
   This page ships no guard against that. One tab is the whole blast radius.
@@ -99,7 +99,7 @@ Either one is enough:
 
 | Option | Why not |
 |---|---|
-| A query box on the Overview page | It puts twenty-two table registrations on a narrative page, and every reader of that page pays for them |
+| A query box on the Overview page | It puts every table registration on a narrative page, and every reader of that page pays for them |
 | One box per page, scoped to that page's tables | The interesting joins cross pages. `fact_run` against `quarantine` answers a real question, and no single page holds both |
 | A server-side query endpoint | It needs a host, credentials, rate limits and a plan for a hostile query. The browser already runs the engine for free |
 | No query box | It leaves the reader with only the questions the author picked, which is the gap this ADR closes |

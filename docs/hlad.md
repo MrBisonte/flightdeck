@@ -52,8 +52,8 @@ flowchart LR
 | 6 | `10_typed.sql` defines `clean` | `landed`, `quarantine` | `clean` view | `clean` is `landed` minus `quarantine` |
 | 7 | `10_typed.sql` unnests `clean` into eight entities | `clean` | 8 tables | Four nested columns flatten into child rows |
 | 8 | `20_curated.sql` defines eleven views | entities | views | Every business number lives here, and only here |
-| 9 | `22_gold.sql` builds thirteen dimensions and facts | entities, reference views | tables | The run grain, which a page load does not give |
-| 10 | `25_publish.sql` copies 22 relations to Parquet | views, tables | `warehouse/curated/*.parquet` | ZSTD compression |
+| 9 | `22_gold.sql` builds sixteen dimensions, facts and metric views | entities, reference views | tables | The run grain, which a page load does not give |
+| 10 | `25_publish.sql` copies 23 relations to Parquet | views, tables | `warehouse/curated/*.parquet` | ZSTD compression |
 | 11 | `30_load_postgres.py` loads twelve relations | Parquet | PostgreSQL | An explicit relation list, no globbing |
 | 12 | `40_export.py` prints payloads in three formats | Parquet | stdout, files | The exporter makes no network call |
 | 13 | The site queries the Parquet in the browser | Parquet | rendered page | The site holds no query the pipeline holds |
@@ -406,6 +406,42 @@ Each candidate key below ran a `count(*)` against a `count(DISTINCT ...)`.
 > different frame windows. Event ids 24 and 25 tell them apart, and `spans`
 > carries neither. Section 6 tracks the fix.
 
+### 4.3 Slowly changing dimensions
+
+Four gold dimensions, two policies. The split follows one test: did the value
+decide something that a reader may later need to reproduce?
+
+| Dimension | Type | Why |
+|---|---|---|
+| `dim_character` | 2 | A run reads as "archer, starting character". Rewrite that line and the run reads differently |
+| `dim_boss` | 2 | Same argument. An encounter carries the boss description of its day |
+| `dim_contract_cap` | 2 | A record sits in quarantine because a cap said so. Move the cap and the decision stops being reproducible |
+| `dim_app_state` | 1 | `is_run_state` is arithmetic, not description, so versioning it needs a fact that joins as-of. Section 6 tracks that |
+| `dim_mode` | 1 | Nothing published names a mode. A history here would hold rows nobody reads |
+
+`dim_character` and `dim_boss` share one table, `dim_member`, because both hold
+a key and a description. The dimension name is a column. Each keeps its own
+current-version table, so a metric view joins `dim_character` and never a
+filter. `reference_history` publishes every version of both.
+
+**What `valid_from` means here.** It is transaction time. It records the moment
+the pipeline first saw the value, not the moment the value became true in the
+game. The reference CSVs carry a key and a note, and no dates, so no other
+reading is available from them.
+
+That has one consequence, and stating it is cheaper than leaving a reader to
+find it. An as-of join against a fact's own timestamp is not supported. Every
+version starts after every fact in this warehouse, so such a join would resolve
+nothing. Facts join the current version instead, which is what `dim_character`
+already hands them.
+
+**Verified.** The three fixture sessions produce nine versioned members, each at
+version 1. `tests/test_versioned_dimensions.py` edits the playbook between two
+gold runs. It pins four cases: a changed description, a withdrawn member, a new
+member, and an untouched member that must stay at one row.
+
+---
+
 ---
 
 ## 5. One Record, End to End
@@ -535,6 +571,7 @@ still add up. That is the point of the quarantine relation.
 | 6 | `blockers.frozen`, `blockers.dashing`, `blockers.x` and `blockers.y` have no documented unit | crow-archer | Open, external |
 | 7 | `blockers.frozen` and `blockers.dashing` read 0 in every fixture row | fixtures | Open, no evidence |
 | 8 | Observed ranges come from 3 sessions. A wider range is likely | fixtures | Accepted |
+| 9 | `dim_app_state` stays Type 1. Reclassifying `is_run_state` rewrites `fact_run.sim_active_s` for every past run. A Type 2 here needs a surrogate key on the fact and a date the CSVs do not carry | pipeline | Open, needs approval |
 
 ---
 
