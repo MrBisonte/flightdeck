@@ -79,6 +79,7 @@ that throttling does not explain.
 | `fact_run` | What happened in one run, at the run grain rather than the page load? |
 | `character_usage` | Which characters do players pick, and how many kills do they get? |
 | `reference_history` | What did the playbook say about this character before, and when did it change? |
+| `reference_governance` | How much of the reference data is under version control, per dimension? |
 
 ## Layout
 
@@ -112,9 +113,10 @@ Run it locally:
 npm install --prefix site && npm run dev --prefix site
 ```
 
-Pages today: Start here, Overview, Four clocks, The game, and Explore. Start
-here is the introduction. Overview is the dashboard. The game reads the gold
-layer. Explore runs the reader's own SQL.
+Pages today: Start here, Overview, Four clocks, The game, Governance, and
+Explore. Start here is the introduction. Overview is the dashboard. The game and
+Governance both read the gold layer, one for play and one for lineage. Explore
+runs the reader's own SQL.
 
 DuckDB compiles to WebAssembly and runs inside the reader's tab, so Explore
 needs no server to answer a query. It declares every published table, lists

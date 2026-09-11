@@ -10,7 +10,7 @@
 
 ## 1. Context
 
-The site publishes twenty-three curated Parquet files. Four pages answer questions
+The site publishes twenty-four curated Parquet files. Four pages answer questions
 the author picked. A reader with a different question had no way to ask it.
 
 Observable Framework already runs DuckDB, compiled to WebAssembly, on every page
@@ -39,18 +39,18 @@ threshold it writes a view instead, and DuckDB then reads byte ranges on demand.
 
 So Framework loads eagerly, not lazily, at every size this project will reach.
 Registration fires on the page's first `sql` call and covers every declared
-table at once. A page declaring twenty-three tables pulls twenty-three files.
+table at once. A page declaring twenty-four tables pulls twenty-four files.
 
 | Measure | Value | How to reproduce |
 |---|---|---|
-| Curated Parquet files | 23 | `ls warehouse/curated/*.parquet` |
-| Total bytes, all files | 46,500 | `ls -l`, fifth column, summed |
+| Curated Parquet files | 24 | `ls warehouse/curated/*.parquet` |
+| Total bytes, all files | 47,766 | `ls -l`, fifth column, summed |
 | Largest file, `spans.parquet` | 11,625 bytes | `ls -l` |
 | Framework's table threshold | 50,000,000 bytes | the snippet above |
-| Warehouse against that threshold | under one tenth of one percent | 46,500 over 50,000,000 |
+| Warehouse against that threshold | under one tenth of one percent | 47,766 over 50,000,000 |
 
 > **Note.** Measure with `ls -l` and not with `du`. `du` rounds every file up to
-> a four kilobyte block, which reports this warehouse as 116 kB, more than twice
+> a four kilobyte block, which reports this warehouse as 120 kB, more than twice
 > its real size.
 
 Three fixture sessions produce this warehouse. It is smaller than a single web

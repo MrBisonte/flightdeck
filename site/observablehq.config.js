@@ -23,6 +23,7 @@ export default {
     {name: "Overview", path: "/overview"},
     {name: "Four clocks", path: "/four-clocks"},
     {name: "The game", path: "/game"},
+    {name: "Governance", path: "/governance"},
     {name: "Explore", path: "/explore"}
   ],
   footer: "Every number on this site is the result of a query over warehouse/curated, which ./demo.sh build writes.",

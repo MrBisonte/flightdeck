@@ -17,6 +17,7 @@ sql:
   incident_timeline: ./data/curated/incident_timeline.parquet
   loss_accounting: ./data/curated/loss_accounting.parquet
   quarantine: ./data/curated/quarantine.parquet
+  reference_governance: ./data/curated/reference_governance.parquet
   reference_history: ./data/curated/reference_history.parquet
   run_outcomes: ./data/curated/run_outcomes.parquet
   session_context: ./data/curated/session_context.parquet

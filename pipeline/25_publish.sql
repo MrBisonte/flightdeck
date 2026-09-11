@@ -42,3 +42,4 @@ COPY (SELECT * FROM boss_encounters_by_kind) TO 'warehouse/curated/boss_encounte
 COPY (SELECT * FROM run_outcomes)            TO 'warehouse/curated/run_outcomes.parquet'            (FORMAT PARQUET, COMPRESSION ZSTD);
 COPY (SELECT * FROM contract_cap_history)    TO 'warehouse/curated/contract_cap_history.parquet'    (FORMAT PARQUET, COMPRESSION ZSTD);
 COPY (SELECT * FROM reference_history)       TO 'warehouse/curated/reference_history.parquet'       (FORMAT PARQUET, COMPRESSION ZSTD);
+COPY (SELECT * FROM reference_governance)    TO 'warehouse/curated/reference_governance.parquet'    (FORMAT PARQUET, COMPRESSION ZSTD);
