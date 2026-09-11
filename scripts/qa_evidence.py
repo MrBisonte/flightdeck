@@ -18,6 +18,10 @@ The sample row is real data, ordered by the first column so that two runs over
 the same warehouse produce the same CSV.
 
     python scripts/qa_evidence.py [--out docs/qa/e2e-evidence.csv] [--no-postgres]
+
+A `--live` run reads one capture instead of the committed fixtures, so pass
+`--raw-glob` to match. Without it, `raw_landed` reports the fixtures while every
+other relation reports the capture, and the two disagree for no reason.
 """
 from __future__ import annotations
 
@@ -130,6 +134,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", default="docs/qa/e2e-evidence.csv")
     ap.add_argument("--no-postgres", action="store_true")
+    ap.add_argument("--raw-glob", default=None,
+                    help="the glob 00_raw.sql read, when it was not demo.sh's default")
     args = ap.parse_args()
 
     if not DB.exists():
@@ -139,8 +145,10 @@ def main() -> int:
     where = origins()
     pg = {} if args.no_postgres else postgres_counts()
 
+    glob = args.raw_glob or source_glob()
+    print(f"  raw_glob: {glob}")
     con = duckdb.connect(DB.as_posix(), read_only=True)
-    con.execute(f"SET variable raw_glob = '{source_glob()}'")
+    con.execute(f"SET variable raw_glob = '{glob}'")
     relations = con.execute(
         "SELECT table_name, CASE WHEN table_type = 'VIEW' THEN 'view' ELSE 'table' END "
         "FROM information_schema.tables WHERE table_schema = 'main' ORDER BY table_name"
@@ -167,11 +175,13 @@ def main() -> int:
 
         pg_rows = pg.get(name, "")
 
+        # An empty relation is a property of the input, not a defect. A single
+        # live capture holds no alarm and no error, so six relations land empty
+        # and every count still agrees. Only disagreement is a defect, so it
+        # gets the verdict column and emptiness gets its own.
         problems = []
         if not isinstance(db_rows, int):
             problems.append(db_rows)
-        elif db_rows == 0:
-            problems.append("no rows")
         if pq_rows != "" and pq_rows != db_rows:
             problems.append(f"parquet {pq_rows} against database {db_rows}")
         if pg_rows != "" and pg_rows != db_rows:
@@ -190,6 +200,7 @@ def main() -> int:
             "parquet_rows": pq_rows,
             "parquet_bytes": pq_bytes,
             "postgres_rows": pg_rows,
+            "empty": "yes" if db_rows == 0 else "no",
             "sample_row": sample(con, name),
             "verdict": "ok" if not problems else "; ".join(problems),
         })
@@ -202,11 +213,15 @@ def main() -> int:
         writer.writerows(rows)
 
     failed = [r for r in rows if r["verdict"] != "ok"]
+    empty = [r["object"] for r in rows if r["empty"] == "yes"]
     print(f"  {out.relative_to(ROOT).as_posix()}: {len(rows)} relations, "
-          f"{len(rows) - len(failed)} ok, {len(failed)} to review")
+          f"{len(rows) - len(failed)} counts agree, {len(failed)} to review, "
+          f"{len(empty)} empty")
     for r in failed:
         print(f"    {r['object']}: {r['verdict']}")
-    return 0
+    if empty:
+        print("    empty, which the input decides: " + ", ".join(empty))
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

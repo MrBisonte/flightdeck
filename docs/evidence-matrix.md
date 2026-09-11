@@ -23,7 +23,7 @@ Each claim on this page maps to one of three things:
 | Conformed dimensions | Shared reference dimensions, with their coverage reported | flightdeck | `fixtures/reference/` joined to the telemetry | `./demo.sh curated` |
 | Slowly changing dimensions | Dimension history survives a fresh build | flightdeck | `dim_member`, Type 2 on characters and bosses, with ADR 0002 for the two that stay Type 1. History in `reference_history` | `./demo.sh gold` |
 | Data minimization | The committed logs carry no real user agent and no real origin. A check enforces it | flightdeck | `sanitize_flightlog.py`, `SANITIZATION.md` | `python scripts/sanitize_flightlog.py --check fixtures/raw` |
-| CI and test gating | CI tests every change | all three | GitHub Actions. 95 tests. CI gates the reconciliation | Open the Actions tab |
+| CI and test gating | CI tests every change | all three | GitHub Actions. 98 tests. CI gates the reconciliation | Open the Actions tab |
 | Evidence based decisions | Decisions follow recorded evidence, from the alarm to the fix | crow-archer, flightdeck | `incident_timeline`, then the stack, then PR 42 | `./demo.sh curated` |
 
 ## The numbers
