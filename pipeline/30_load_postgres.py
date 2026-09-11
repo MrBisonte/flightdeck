@@ -26,6 +26,8 @@ FALLBACK_DB = ROOT / "warehouse" / "postgres_fallback.duckdb"
 
 DSN = "host=localhost port=55432 dbname=flightdeck user=flightdeck password=flightdeck"
 SCHEMA = "curated"
+#: Pinned in docker-compose.yml, so it is the one name both files agree on.
+CONTAINER = "flightdeck-pg"
 
 #: Relation name -> Parquet file. Quarantine ships alongside the clean data so a
 #: consumer can always see how much was held back.
@@ -53,15 +55,43 @@ def docker_is_running() -> bool:
     return done.returncode == 0 and bool(done.stdout.strip())
 
 
+def container_health() -> str:
+    """Docker's health state for the container, or "" when it does not exist."""
+    done = subprocess.run(
+        ["docker", "inspect", "-f", "{{.State.Health.Status}}", CONTAINER],
+        capture_output=True, text=True,
+    )
+    return done.stdout.strip() if done.returncode == 0 else ""
+
+
 def start_postgres() -> None:
-    subprocess.run(["docker", "compose", "up", "-d", "postgres"],
-                   cwd=ROOT, check=True, capture_output=True, text=True)
+    """Bring the container up, or adopt one that another checkout started.
+
+    The container name and the port are both pinned, so two checkouts cannot
+    each run their own PostgreSQL. A second checkout's `compose up` does not
+    reuse the running container, it fails on the name, so a healthy one is
+    adopted here instead.
+
+    The failure used to raise CalledProcessError with the compose output
+    captured and discarded, which told an operator that something failed and
+    nothing about what.
+    """
+    if container_health() == "healthy":
+        print(f"  {CONTAINER} is already healthy. Reusing it.")
+        return
+
+    done = subprocess.run(["docker", "compose", "up", "-d", "postgres"],
+                          cwd=ROOT, capture_output=True, text=True)
+    if done.returncode != 0:
+        detail = (done.stderr or done.stdout).strip().splitlines()[-3:]
+        raise LoadError("\n".join([
+            "docker compose could not start postgres.",
+            *(f"    {line.strip()}" for line in detail),
+            f"Hint: docker rm -f {CONTAINER}, then rerun.",
+        ]))
+
     for _ in range(30):
-        done = subprocess.run(
-            ["docker", "inspect", "-f", "{{.State.Health.Status}}", "flightdeck-pg"],
-            capture_output=True, text=True,
-        )
-        if done.stdout.strip() == "healthy":
+        if container_health() == "healthy":
             return
         time.sleep(2)
     raise LoadError(

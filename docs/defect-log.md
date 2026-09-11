@@ -4,20 +4,20 @@ Every defect found while building this repository: what broke, why, and what
 fixed it.
 
 The log exists because a pipeline that claims to find problems in other people's
-data has to account for the problems in its own build. This log lists thirteen
-defects. All thirteen are closed.
+data has to account for the problems in its own build. This log lists fourteen
+defects. All fourteen are closed.
 
 ## Summary
 
 | Severity | Count | Meaning |
 |---|---|---|
 | High | 8 | Would reach a user, break the demo, or disclose information |
-| Medium | 5 | Caught inside the build, or degrades quality without breaking it |
+| Medium | 6 | Caught inside the build, or degrades quality without breaking it |
 
 | Category | Count |
 |---|---|
 | Data contract and schema | 3 |
-| Tooling and gates | 6 |
+| Tooling and gates | 7 |
 | Build and packaging | 2 |
 | Process | 2 |
 
@@ -29,7 +29,7 @@ The table shows which control earned its place.
 |---|---|---|
 | Running a gate | 2 | DEF-01, DEF-03 |
 | Unit or integration test | 3 | DEF-02, DEF-04, DEF-11 |
-| Live rehearsal | 3 | DEF-08, DEF-09, DEF-13 |
+| Live rehearsal | 4 | DEF-08, DEF-09, DEF-13, DEF-14 |
 | CI | 2 | DEF-05, DEF-06 |
 | Manual check | 2 | DEF-07, DEF-12 |
 | Peer review | 1 | DEF-10 |
@@ -37,12 +37,12 @@ The table shows which control earned its place.
 ```
    tests + gates   ->  5 defects   found before anything ran end to end
    CI              ->  2 defects   found on a clean machine, not this one
-   rehearsal       ->  3 defects   found only by running the real path
+   rehearsal       ->  4 defects   found only by running the real path
    review          ->  1 defect    found only by a second reader
 ```
 
-Only a live capture reached DEF-08, DEF-09 and DEF-13, and no test found them.
-That is the argument for rehearsing rather than assuming.
+Only a live capture reached DEF-08, DEF-09, DEF-13 and DEF-14, and no test
+found them. That is the argument for rehearsing rather than assuming.
 
 ## The register
 
@@ -230,15 +230,32 @@ caught this. The defect lived only on the path that skipped the step.
 inside the sanitizer, so that fix could not reach it. A list of field names is
 only correct until someone adds a field.
 
+### DEF-14. The load step hid why Docker refused
+
+| Field | Detail |
+|---|---|
+| **Severity** | Medium |
+| **Category** | Tooling and gates |
+| **Symptom** | `./demo.sh load` from a second checkout printed a `CalledProcessError` traceback and no cause |
+| **Root cause** | `start_postgres` ran `docker compose up` with `check=True` and `capture_output=True`, so the compose output went into an exception nobody read. The real message said the container name was already in use. `container_name` and the port are both pinned, so a second checkout cannot start its own PostgreSQL, and compose fails rather than reusing the running one |
+| **Resolution** | The step adopts a container that already reports healthy. A compose failure now raises `LoadError` carrying the last three lines of the compose output and a hint that names a command which exists |
+| **Found by** | Live rehearsal, running the pipeline from a second copy of the tree |
+| **Fixed in** | this commit |
+
+**Note.** The traceback proved a failure and explained nothing, which is the
+same shape as DEF-03 and DEF-11. A control that reports without a reason costs
+more than it saves.
+
 ## What the log says
 
-Three patterns come out of thirteen entries.
+Three patterns come out of fourteen entries.
 
 1. **Controls that always pass are invisible.** DEF-03 and DEF-11 both produced
    a green result over a broken check. Both needed something outside the check
    to notice.
 2. **Some defects need the real path.** DEF-08 and DEF-09 survived a full test
-   suite and appeared within minutes of a live capture.
+   suite and appeared within minutes of a live capture. DEF-14 needed the path
+   run twice, from two directories.
 3. **Some defects need a second reader.** DEF-10 passed every automated gate.
    Review caught it.
 
