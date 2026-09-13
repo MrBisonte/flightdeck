@@ -21,7 +21,9 @@ html[data-view="dashboard"] {
   --dash-card: #ffffff;
   --dash-ink: #1c1a2e;
   --dash-muted: #6b6880;
-  --dash-accent: #6d5ae0;
+  /* 4.5:1 against --dash-accent-soft, which is the table header background.
+   * #6d5ae0 read 4.35:1 there and missed WCAG AA on every table on the site. */
+  --dash-accent: #5f4ecd;
   --dash-accent-soft: #f0edfd;
   --dash-line: #eae8f4;
   --dash-good: #0f9d7a;
@@ -42,7 +44,7 @@ html[data-view="dashboard"] {
   --theme-foreground-alt: #1c1a2e;
   --theme-background: #f6f5fb;
   --theme-background-alt: #ffffff;
-  --theme-foreground-focus: #6d5ae0;
+  --theme-foreground-focus: var(--dash-accent);
 }
 
 html[data-view="dashboard"] body {
@@ -191,4 +193,26 @@ html[data-view="engineering"] .only-dashboard { display: none; }
 @media (max-width: 640px) {
   #view-switch { top: 8px; right: 8px; font-size: 12px; }
   #view-switch button { padding: 6px 10px; }
+}
+
+/* Inputs.table renders with table-layout: fixed and a width equal to its box,
+ * so on a 375px screen an eight column table gives every column 32px and clips
+ * every value to nothing. The form around it already scrolls sideways, so a
+ * floor on the table turns crushing into scrolling. A desktop column is wider
+ * than this floor, so the rule only bites on a narrow screen. */
+form[class*="-table"] table {
+  min-width: 40rem;
+}
+
+/* The Engineering view keeps Framework's own theme, whose muted foreground is
+ * 60% of the ink mixed into the page. That paints the sidebar links and the
+ * inactive half of the view switch at 4.10:1, just under the 4.5:1 that WCAG AA
+ * asks of text this size. 66% clears it at 5.00:1 and reads the same.
+ *
+ * Light only. The dark theme mixes towards black, where a higher percentage
+ * would make the same text worse. */
+@media (prefers-color-scheme: light) {
+  :root {
+    --theme-foreground-muted: color-mix(in srgb, #1b1e23 66%, #ffffff);
+  }
 }

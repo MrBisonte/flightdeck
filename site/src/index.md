@@ -6,7 +6,7 @@ sql:
 
 # flightdeck
 
-A browser game keeps a flight log while you play. This project reads that log,
+A [browser game](https://mrbisonte.github.io/crow-archer/) keeps a flight log while you play. This project reads that log,
 checks it against a written contract, and publishes the result as open Parquet.
 
 Reading the log is not the hard part. Trusting it is.
