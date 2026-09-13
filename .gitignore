@@ -23,3 +23,6 @@ site/dist/
 **/.observablehq/cache/
 scratch-design/
 docs/qa/ci-check.csv
+# Page captures. Two megabytes of PNG that every build can regenerate, and
+# that go stale the moment a page changes. docs/qa/README.md says how.
+docs/qa/screenshots/
