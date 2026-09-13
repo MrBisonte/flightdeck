@@ -22,3 +22,4 @@ site/node_modules/
 site/dist/
 **/.observablehq/cache/
 scratch-design/
+docs/qa/ci-check.csv
