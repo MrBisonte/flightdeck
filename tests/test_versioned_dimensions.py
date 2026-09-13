@@ -85,7 +85,14 @@ def versioned(tmp_path_factory):
 
 @pytest.fixture(scope="module")
 def rows(versioned):
-    """dim_member as plain tuples. It is a table, so no relative path binds."""
+    """dim_member as plain tuples. It is a table, so no relative path binds.
+
+    The two timestamps arrive as milliseconds since the epoch rather than as
+    datetimes. Handing a TIMESTAMP WITH TIME ZONE to Python makes the DuckDB
+    driver import pytz, which is not a dependency of this project and was only
+    present on the machine that wrote these tests. A BIGINT still orders and
+    still reads NULL, which is all the assertions below ask of it.
+    """
     import duckdb
 
     con = duckdb.connect((versioned / "warehouse" / "flightdeck.duckdb").as_posix(),
@@ -93,7 +100,9 @@ def rows(versioned):
     try:
         return con.execute(
             "SELECT dimension, member_key, version_seq, description, "
-            "       valid_from, valid_to, is_current "
+            "       epoch_ms(valid_from) AS valid_from, "
+            "       epoch_ms(valid_to)   AS valid_to, "
+            "       is_current "
             "FROM dim_member ORDER BY dimension, member_key, version_seq"
         ).fetchall()
     finally:

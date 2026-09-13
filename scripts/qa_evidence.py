@@ -114,11 +114,17 @@ def count(con, relation: str):
         return str(exc).splitlines()[0]
 
 
-def sample(con, relation: str) -> str:
-    """One real row, ordered so the CSV is reproducible."""
+def sample(con, relation: str, columns) -> str:
+    """One real row, ordered so the CSV is reproducible.
+
+    Every column casts to VARCHAR on the way out. A TIMESTAMP WITH TIME ZONE
+    handed to Python makes the DuckDB driver import pytz, which this project
+    does not depend on, and the CSV wants the text anyway.
+    """
+    select = ", ".join(f'CAST("{name}" AS VARCHAR)' for name, _ in columns) or "*"
     for order in ("ORDER BY 1", ""):
         try:
-            row = con.execute(f'SELECT * FROM "{relation}" {order} LIMIT 1').fetchone()
+            row = con.execute(f'SELECT {select} FROM "{relation}" {order} LIMIT 1').fetchone()
             break
         except duckdb.Error:
             continue
@@ -201,7 +207,7 @@ def main() -> int:
             "parquet_bytes": pq_bytes,
             "postgres_rows": pg_rows,
             "empty": "yes" if db_rows == 0 else "no",
-            "sample_row": sample(con, name),
+            "sample_row": sample(con, name, columns),
             "verdict": "ok" if not problems else "; ".join(problems),
         })
     con.close()
