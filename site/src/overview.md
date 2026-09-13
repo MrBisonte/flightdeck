@@ -10,7 +10,7 @@ sql:
 
 # flightdeck
 
-A browser game writes a flight log. This pipeline reads that log, checks it
+A [browser game](https://mrbisonte.github.io/crow-archer/) writes a flight log. This pipeline reads that log, checks it
 against a written contract, and publishes the result as open Parquet.
 
 <div class="only-engineering">

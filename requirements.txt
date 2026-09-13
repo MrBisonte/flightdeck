@@ -1,6 +1,9 @@
 # Runtime
 duckdb>=1.0
 PyYAML>=6.0
+# The DuckDB driver imports pytz to hand a TIMESTAMP WITH TIME ZONE to
+# Python, which 40_export.py does for every row it reads.
+pytz>=2024.1
 
 # Tests
 pytest>=8.0
