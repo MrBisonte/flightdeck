@@ -59,6 +59,9 @@ jobs:
           cache: npm
           cache-dependency-path: site/package-lock.json
 
+      - name: Exporters build their payloads
+        run: ./demo.sh export
+
       - name: Published Parquet matches the warehouse
         run: python scripts/qa_evidence.py --no-postgres --out docs/qa/ci-check.csv
 
