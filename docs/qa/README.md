@@ -1,12 +1,14 @@
 # QA evidence
 
-Two artifacts, both regenerated rather than written by hand.
+Three artifacts, all regenerated rather than written by hand. The two CSV
+files are committed. The captures are not, because they weigh two megabytes
+and go stale the moment a page changes.
 
 | Artifact | What it holds | How to rebuild |
 |---|---|---|
 | `e2e-evidence.csv` | One row per relation, from the committed fixtures | `./demo.sh all` then `python scripts/qa_evidence.py` |
 | `e2e-evidence-live.csv` | The same rows, from one capture through `--live` | See "Both inputs" below |
-| `screenshots/` | Every page of the built site, full height, in both views | See "Rebuilding the screenshots" |
+| `screenshots/` | Every page of the built site, full height, in both views. Not committed | See "Rebuilding the screenshots" |
 
 Each row carries the layer, the kind, the row count and the column list with
 types. It also carries a real sample row, plus the counts the Parquet and
