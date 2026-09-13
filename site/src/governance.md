@@ -43,6 +43,16 @@ WHERE dimension = 'every dimension'
 ```
 
 ```js
+// Minutes in UTC, which is what every timestamp in this warehouse means. The
+// full value stays in the published Parquet for anyone who needs the second.
+const utc = (d) => d == null ? "" : new Date(d).toISOString().slice(0, 16).replace("T", " ");
+
+// The two columns that hold a sentence rather than a word. presentation.css
+// puts a floor under every table, which is enough for the rest.
+const WIDTHS = {description: 150, never_seen: 300};
+```
+
+```js
 const g = totals.get(0);
 display(html`<div class="grid grid-cols-3">
   <div class="card"><h2>Members under version control</h2><span class="big">${g.members}</span></div>
@@ -64,18 +74,16 @@ first dimension here to keep a history, and the timestamps say so.
 ```sql echo id=policy
 SELECT dimension,
        members,
-       members_in_force,
        versions,
        superseded,
-       first_seen,
-       last_change
+       first_seen
 FROM reference_governance
 WHERE dimension <> 'every dimension'
 ORDER BY dimension
 ```
 
 ```js
-display(Inputs.table(policy, {rows: 8, width: {first_seen: 190, last_change: 190}}));
+display(Inputs.table(policy, {rows: 8, format: {first_seen: utc}, width: WIDTHS}));
 ```
 
 `dim_app_state` and `dim_mode` are absent, and that is a decision rather than an
@@ -100,7 +108,7 @@ ORDER BY dimension, member_key, version_seq
 ```
 
 ```js
-display(Inputs.table(history, {rows: 16, width: {valid_from: 190}}));
+display(Inputs.table(history, {rows: 16, format: {valid_from: utc}, width: WIDTHS}));
 ```
 
 ## 4. What the contract allowed
@@ -118,7 +126,7 @@ ORDER BY cap_key, valid_from
 ```
 
 ```js
-display(Inputs.table(caps, {rows: 10}));
+display(Inputs.table(caps, {rows: 10, format: {valid_from: utc}, width: WIDTHS}));
 ```
 
 ## 5. What nobody exercised
@@ -137,7 +145,7 @@ ORDER BY dimension
 ```
 
 ```js
-display(Inputs.table(coverage, {rows: 9, width: {never_seen: 420}}));
+display(Inputs.table(coverage, {rows: 9, width: WIDTHS}));
 ```
 
 A third of the mode dimension and a third of the app states never appear. Three
