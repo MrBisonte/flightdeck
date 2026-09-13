@@ -36,7 +36,7 @@ jobs:
         run: bash scripts/scan_secrets.sh
 
       - name: Docs follow Simplified Technical English
-        run: python scripts/check_ste.py README.md docs/*.md fixtures/SANITIZATION.md fixtures/reference/README.md site/src/*.md
+        run: python scripts/check_ste.py README.md docs/*.md docs/adr/*.md docs/qa/*.md fixtures/SANITIZATION.md fixtures/reference/README.md site/src/*.md
 
       - name: Fixtures are sanitized
         run: python scripts/sanitize_flightlog.py --check fixtures/raw
@@ -58,6 +58,9 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: site/package-lock.json
+
+      - name: Published Parquet matches the warehouse
+        run: python scripts/qa_evidence.py --no-postgres --out docs/qa/ci-check.csv
 
       - name: Site builds from the pipeline output
         run: npm ci --prefix site && npm run build --prefix site
