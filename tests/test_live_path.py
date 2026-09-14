@@ -261,4 +261,4 @@ def test_a_masked_origin_keeps_its_class_in_the_evidence(live_run):
     with warehouse(live_run) as con:
         messages = [row[0] for row in con.execute("SELECT msg FROM errors").fetchall()]
     assert messages
-    assert all(m.endswith("http://private.invalid/src/game.ts") for m in messages)
+    assert all(m.endswith("http://masked.invalid/src/game.ts") for m in messages)

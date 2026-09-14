@@ -32,12 +32,10 @@ from __future__ import annotations
 
 import csv
 import functools
-import ipaddress
 import json
 import pathlib
 import re
 import sys
-from urllib.parse import urlsplit
 
 #: The known origins, one row each, with the class and the publish decision.
 #: pipeline/10_typed.sql reads the same file, so the two can never drift.
@@ -62,11 +60,15 @@ ORIGIN = re.compile(r"https?://[^/\s\"')]+")
 LOCALHOST = "http://localhost"
 FIXTURE_ORIGINS = frozenset({LOCALHOST})
 
-#: Host names that mean this machine, whatever the port.
-LOOPBACK = frozenset({"localhost", "127.0.0.1", "::1"})
-
-#: Suffixes that mark an intranet name. A bare name with no dot is one too.
-INTRANET_SUFFIXES = (".local", ".internal", ".lan", ".home.arpa")
+#: What an origin the reference does not list becomes.
+#:
+#: One mask, not one per class. Classifying an unlisted origin would mean
+#: guessing from its host name and then publishing the guess, and an origin
+#: nobody listed is precisely the one nothing is known about. `.invalid` is
+#: reserved by RFC 2606, so a mask can never collide with a real host. The mask
+#: is itself a row in the reference, which keeps one rule for the gate and one
+#: join for the pipeline rather than a special case in each.
+MASK = "http://masked.invalid"
 
 # Shapes that must never survive into a published fixture.
 #
@@ -111,40 +113,6 @@ def listed_origins() -> frozenset[str]:
         return frozenset(row["origin"] for row in csv.DictReader(fh))
 
 
-def origin_kind(origin: str) -> str:
-    """Classify an origin without naming its host.
-
-    The class is the whole of what a masked origin keeps, so it has to be
-    decided here rather than guessed downstream. ``local`` is this machine,
-    ``private`` is a network nobody outside it can reach, and ``public`` is
-    everything else. A host this cannot place reads as public, which is the
-    class that keeps the least.
-    """
-    host = (urlsplit(origin).hostname or "").lower()
-    if host in LOOPBACK or host.endswith(".localhost"):
-        return "local"
-    try:
-        address = ipaddress.ip_address(host)
-    except ValueError:
-        # A name, not an address. A bare word with no dot is an intranet name.
-        if "." not in host or host.endswith(INTRANET_SUFFIXES):
-            return "private"
-        return "public"
-    if address.is_loopback:
-        return "local"
-    return "private" if address.is_private or address.is_link_local else "public"
-
-
-def masked(origin: str) -> str:
-    """The stand-in for an origin the reference does not list.
-
-    ``.invalid`` is reserved by RFC 2606, so a mask can never name a real host.
-    Each mask is itself a row in the reference, which keeps one rule for the
-    gate and one join for the pipeline instead of a special case in each.
-    """
-    return f"http://{origin_kind(origin)}.invalid"
-
-
 def scrub_origins(text: str) -> str:
     """Rewrite every origin to localhost. The rule for a committed fixture."""
     return ORIGIN.sub(LOCALHOST, text)
@@ -153,10 +121,7 @@ def scrub_origins(text: str) -> str:
 def mask_origins(text: str) -> str:
     """Keep a listed origin, mask the rest. The rule for a live capture."""
     allowed = listed_origins()
-    return ORIGIN.sub(
-        lambda m: m.group(0) if m.group(0) in allowed else masked(m.group(0)),
-        text,
-    )
+    return ORIGIN.sub(lambda m: m.group(0) if m.group(0) in allowed else MASK, text)
 
 
 def scrub_deep(value, rewrite=scrub_origins):

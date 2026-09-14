@@ -213,7 +213,7 @@ not constraints.
 | `trace_level` | `off`, `time`, `ops` | no |
 | `span` | `sim`, `tiles`, `fog`, `bodies`, `vignette`, `hud` | no |
 | `spans.origin` | `alarm_trace`, `beat_trace` | no |
-| `sessions.origin_kind` | `local`, `private`, `public`, `unlisted` | no |
+| `sessions.origin_kind` | `local`, `public`, `masked`, `unlisted` | no |
 
 ---
 
