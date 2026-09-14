@@ -47,9 +47,10 @@ listed origin in a live capture and masks the rest.
 [`pipeline/25_publish.sql`](../../pipeline/25_publish.sql) applies
 `may_publish` at the boundary of the public site.
 
-The three `.invalid` rows are the masks. RFC 2606 reserves that suffix, so a
-mask can never name a real host. Listing them keeps one rule for the gate and
-one join for the pipeline, rather than a special case in each.
+The `.invalid` row is the mask. RFC 2606 reserves that suffix, so a mask can
+never name a real host. One mask and not one per class: a class for an unlisted
+origin could only be a guess at its host name. Listing the mask keeps one rule
+for the gate and one join for the pipeline, rather than a special case in each.
 
 The list works one way. The sanitizer masks any origin no row names, and passes
 none of them through. A missing row costs a masked value. A missing rule costs

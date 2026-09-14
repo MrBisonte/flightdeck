@@ -37,9 +37,11 @@ shows, so the origin a session came from is worth keeping. The game now runs at
 claimed to come from localhost would say something untrue.
 
 [`fixtures/reference/origins.csv`](reference/origins.csv) lists the origins a
-capture may keep. The list works one way only: an origin no row names loses its
-host and keeps its class, as `http://private.invalid`. An allowlist fails
-closed, and DEF-13 is what a list that fails open costs.
+capture may keep. The list works one way only: an origin no row names becomes
+`http://masked.invalid` and keeps nothing. Classifying it would mean guessing
+from a host name and then publishing the guess, and an unlisted origin is the
+one nothing is known about. An allowlist fails closed, and DEF-13 is what a
+list that fails open costs.
 
 ## The changes
 

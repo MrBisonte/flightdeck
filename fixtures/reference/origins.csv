@@ -2,6 +2,4 @@ origin,kind,may_publish,note
 http://localhost,local,true,the hard scrub output. The only origin a committed fixture carries
 http://localhost:8090,local,false,the dev server. The port names one machine's setup
 https://mrbisonte.github.io,public,true,the published crow-archer build
-http://local.invalid,local,true,mask for an unlisted local origin
-http://private.invalid,private,true,mask for an unlisted private origin
-http://public.invalid,public,true,mask for an unlisted public origin
+http://masked.invalid,masked,true,stand-in for an origin no row above names. Reserved by RFC 2606

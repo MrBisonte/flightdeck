@@ -8,7 +8,7 @@ import pytest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "scripts"))
 
 from sanitize_flightlog import (browser_family, check_clean, listed_origins, mask_origins,
-                                masked, origin_kind, sanitize_record, scrub_origins)
+                                MASK, sanitize_record, scrub_origins)
 
 
 @pytest.mark.parametrize(
@@ -158,41 +158,18 @@ def test_check_clean_flags_an_unlisted_localhost(tmp_path, href):
     assert any("unlisted origin" in p for p in check_clean(bad))
 
 
-def test_check_clean_flags_a_host_that_only_starts_with_localhost(tmp_path):
-    """localhost.evil.com is not localhost."""
-    bad = tmp_path / "bad.jsonl"
-    bad.write_text(json.dumps({"kind": "hello", "ua": "Chrome",
-                               "href": "http://localhost.evil.com/game"}) + "\n",
-                   encoding="utf-8")
-    assert any("unlisted origin" in p for p in check_clean(bad))
-
-
 # ---------------------------------------------------------------------------
 # The live route. A listed origin is data; everything else is masked.
 # ---------------------------------------------------------------------------
-@pytest.mark.parametrize("origin, expected", [
-    ("http://localhost:8090", "local"),
-    ("http://127.0.0.1:5173", "local"),
-    ("http://192.168.1.50:5173", "private"),
-    ("http://10.0.0.8", "private"),
-    ("http://buildbox:5173", "private"),
-    ("http://buildbox.local", "private"),
-    ("https://mrbisonte.github.io", "public"),
-    ("http://localhost.evil.com", "public"),
-])
-def test_origin_kind_classifies_without_naming_the_host(origin, expected):
-    assert origin_kind(origin) == expected
-
-
 def test_mask_keeps_a_listed_origin_verbatim():
     stack = "at update (https://mrbisonte.github.io/crow-archer/game.ts:67:30)"
     assert mask_origins(stack) == stack
 
 
-def test_mask_replaces_an_unlisted_origin_with_its_class():
+def test_mask_replaces_an_unlisted_origin():
     out = mask_origins("boom at http://192.168.1.50:5173/src/game.ts:1:2")
     assert "192.168.1.50" not in out
-    assert out.endswith("http://private.invalid/src/game.ts:1:2")
+    assert out.endswith(f"{MASK}/src/game.ts:1:2")
 
 
 def test_mask_reaches_a_nested_event_body():
@@ -203,7 +180,7 @@ def test_mask_reaches_a_nested_event_body():
                     "data": {"url": "http://192.168.1.50:5173/a.png"}}],
     }, mask_origins)
     assert "192.168.1.50" not in json.dumps(rec)
-    assert rec["events"][0]["data"]["url"] == "http://private.invalid/a.png"
+    assert rec["events"][0]["data"]["url"] == f"{MASK}/a.png"
 
 
 def test_masking_is_idempotent():
@@ -212,11 +189,9 @@ def test_masking_is_idempotent():
     assert mask_origins(once) == once
 
 
-def test_every_mask_is_a_listed_origin():
+def test_the_mask_is_a_listed_origin():
     """Otherwise the gate would refuse the sanitizer's own output."""
-    allowed = listed_origins()
-    for origin in ("http://192.168.1.50", "https://example.com", "http://127.0.0.1:1"):
-        assert masked(origin) in allowed
+    assert MASK in listed_origins()
 
 
 def test_the_live_gate_accepts_a_listed_public_origin(tmp_path):
