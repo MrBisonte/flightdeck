@@ -36,6 +36,25 @@ def test_reference_dimension_matches_contract_enum(enum_key, csv_name, csv_colum
     assert read_reference(csv_name, csv_column) == CONTRACT["enums"][enum_key]
 
 
+def test_every_reference_origin_carries_a_contract_class():
+    """origins.csv is keyed on the origin, so the enum pins the kind column."""
+    kinds = set(read_reference("origins.csv", "kind"))
+    assert kinds <= set(CONTRACT["enums"]["origin_kind"])
+
+
+def test_unlisted_is_derived_and_never_a_reference_row():
+    """`unlisted` is what the LEFT JOIN produces when no row matches. A row
+    claiming it would mean an origin listed as not listed."""
+    assert "unlisted" in CONTRACT["enums"]["origin_kind"]
+    assert "unlisted" not in set(read_reference("origins.csv", "kind"))
+
+
+def test_the_typed_layer_fails_closed_on_an_unknown_origin():
+    """The deny answer has to be the default, not a case someone remembered."""
+    assert "coalesce(o.kind, 'unlisted')" in TYPED_SQL
+    assert "coalesce(o.may_publish, false)" in TYPED_SQL
+
+
 def test_state_enum_has_the_documented_fifteen():
     """The playbook says fifteen app states. If that changes, this must too."""
     assert len(CONTRACT["enums"]["state"]) == 15

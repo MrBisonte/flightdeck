@@ -21,6 +21,17 @@ CREATE OR REPLACE VIEW ref_states AS SELECT * FROM read_csv('fixtures/reference/
 CREATE OR REPLACE VIEW ref_modes  AS SELECT * FROM read_csv('fixtures/reference/modes.csv');
 CREATE OR REPLACE VIEW ref_chars  AS SELECT * FROM read_csv('fixtures/reference/characters.csv');
 CREATE OR REPLACE VIEW ref_bosses AS SELECT * FROM read_csv('fixtures/reference/boss_kinds.csv');
+-- The known request origins. Not from the playbook: this one describes where
+-- the game runs, so scripts/sanitize_flightlog.py reads the same file.
+CREATE OR REPLACE VIEW ref_origins AS SELECT * FROM read_csv('fixtures/reference/origins.csv');
+
+-- The origin of a page load, from the href the recorder already sends. The
+-- wire format carries no origin field, and a parallel change to the game is
+-- not adding one, so it is derived here instead of expected on the wire.
+-- coalesce, so a missing href reads as the empty string and fails the join
+-- rather than disappearing into a NULL comparison.
+CREATE OR REPLACE MACRO origin_of(href) AS
+    coalesce(regexp_extract(href, '^(https?://[^/]+)', 1), '');
 
 -- Contract caps, materialized as a table rather than session variables.
 --
@@ -114,6 +125,14 @@ SELECT 'spans', session_id, page_load_seq, srv, kind, 'trace_frames_over_cap',
 FROM landed
 WHERE trace IS NOT NULL AND trace.frames > cap('trace_frames')
 UNION ALL
+-- Default-deny, made visible. An origin no reference row names still reaches
+-- the relations, because a page load is evidence whatever served it, but it is
+-- reported here rather than passed over in silence.
+SELECT 'sessions', session_id, page_load_seq, srv, kind, 'origin_not_in_reference',
+       'origin=' || origin_of(href)
+FROM landed
+WHERE kind = 'hello' AND origin_of(href) NOT IN (SELECT origin FROM ref_origins)
+UNION ALL
 SELECT 'landed', session_id, page_load_seq, srv, kind, 'srv_missing', 'srv IS NULL'
 FROM landed WHERE srv IS NULL;
 
@@ -130,7 +149,7 @@ WHERE page_load_seq > 0 AND srv IS NOT NULL;
 CREATE OR REPLACE TABLE sessions AS
 WITH hello AS (
     SELECT session_id, session_date, page_load_seq, client_id, has_native_client_id,
-           srv AS hello_srv, wall AS hello_wall, href, ua, dpr
+           srv AS hello_srv, wall AS hello_wall, href, origin_of(href) AS origin, ua, dpr
     FROM clean WHERE kind = 'hello'
 ),
 farewell AS (
@@ -146,11 +165,17 @@ activity AS (
     FROM clean GROUP BY ALL
 )
 SELECT h.*,
+       -- The reference decides the class and the publish decision, never this
+       -- file. A LEFT JOIN that misses leaves both NULL, and both coalesce to
+       -- the deny answer, so an origin nobody listed can never publish itself.
+       coalesce(o.kind, 'unlisted')                             AS origin_kind,
+       coalesce(o.may_publish, false)                           AS origin_may_publish,
        f.bye_srv,
        a.last_srv, a.beats, a.alarms, a.errors,
        f.bye_srv IS NOT NULL                                    AS ended_cleanly,
        (coalesce(f.bye_srv, a.last_srv) - h.hello_srv) / 1000.0 AS duration_s
 FROM hello h
+LEFT JOIN ref_origins o ON o.origin = h.origin
 LEFT JOIN farewell f USING (session_id, page_load_seq)
 LEFT JOIN activity a USING (session_id, page_load_seq);
 
