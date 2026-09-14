@@ -18,6 +18,29 @@ Naming the fields to rewrite was the earlier design and it leaked. An origin in
 `err.msg` reached three published relations, and an origin inside a nested event
 body reached the raw layer. The scrub now walks the record instead.
 
+## Two routes, and which one runs
+
+An origin takes one of two routes. This directory takes the first.
+
+| Route | Flag | What happens to an origin |
+|---|---|---|
+| Fixture scrub | none | Every origin becomes `http://localhost` |
+| Live capture | `--live` | A listed origin survives. Every other one loses its host |
+
+The files here sit in a public repository, so they are already published. They
+carry no origin at all, whatever the reference says.
+
+A live capture is different. It stays on one disk until
+[`pipeline/25_publish.sql`](../pipeline/25_publish.sql) decides what the site
+shows, so the origin a session came from is worth keeping. The game now runs at
+`https://mrbisonte.github.io/crow-archer/`, and a capture from there that
+claimed to come from localhost would say something untrue.
+
+[`fixtures/reference/origins.csv`](reference/origins.csv) lists the origins a
+capture may keep. The list works one way only: an origin no row names loses its
+host and keeps its class, as `http://private.invalid`. An allowlist fails
+closed, and DEF-13 is what a list that fails open costs.
+
 ## The changes
 
 | Field | Before | After | Reason |
@@ -42,10 +65,14 @@ gate, not as an afterthought.
 |---|---|
 | Windows drive path, `C:\...` | none found |
 | Unix home path, `/Users/`, `/home/` | none found |
-| An origin whose host is not `localhost` | none found |
+| Any origin other than `http://localhost` | none found |
 | A cloud folder name, always under one of the above | none found |
 | A browser build token | removed with the user agent |
 | An untrimmed user agent | none remain |
+
+The origin row reads as an allowlist, not as a shape. The gate used to accept
+any host spelled `localhost`, port and all, which let one stale file keep a dev
+server port. DEF-15 records it.
 
 Check the committed fixtures yourself:
 
