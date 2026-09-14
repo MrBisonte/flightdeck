@@ -26,8 +26,20 @@ import pytest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 #: A private address is easier to spot in a failure message than a hostname.
+#: No reference row names it, so every route below has to mask it.
 DEV_ORIGIN = "http://192.168.1.50:5173"
-CID = "3f2a1c88-9b4e-4d21-8f7a-5c6d0e1b2a34"
+
+#: Listed and publishable. The published build, which is the case the whole
+#: origin change exists for.
+PUBLIC_ORIGIN = "https://mrbisonte.github.io"
+
+#: Listed and withheld. The dev server keeps its origin on this disk and loses
+#: it at the publish boundary, which is the other half of the decision.
+DEV_PORT_ORIGIN = "http://localhost:8090"
+
+CID_PUBLIC = "3f2a1c88-9b4e-4d21-8f7a-5c6d0e1b2a34"
+CID_LOCAL = "7b1d4e02-6a35-4c19-9e28-1f3b5d7c9a06"
+CID_OLDER = "c04f81aa-2d67-4b53-8a71-0e9c6b4d2f15"
 FULL_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
            "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.3537.57")
 
@@ -43,11 +55,16 @@ def _pulse(t: int, kills: int) -> dict:
             "soldiers": 0, "arrows": 0, "boss": None}
 
 
-def capture(first_srv: int, beats: int) -> list[dict]:
-    """One page load carrying a dev origin in four different fields."""
+def capture(first_srv: int, beats: int, origin: str, cid: str) -> list[dict]:
+    """One page load served from ``origin``.
+
+    The unlisted dev address rides along in four other fields, so a scrub that
+    names its fields still fails here. The page load's own origin is a separate
+    question, and every test below asks both.
+    """
     srv = first_srv
-    records = [{"kind": "hello", "cid": CID, "wall": srv,
-                "href": DEV_ORIGIN + "/crow-archer/", "ua": FULL_UA,
+    records = [{"kind": "hello", "cid": cid, "wall": srv,
+                "href": origin + "/crow-archer/", "ua": FULL_UA,
                 "dpr": 1, "srv": srv}]
     for i in range(1, beats + 1):
         srv += 1000
@@ -56,17 +73,17 @@ def capture(first_srv: int, beats: int) -> list[dict]:
             events = [{"id": 1, "level": "warn", "timestamp": srv, "source": "net",
                        "message": "asset fetch failed from " + DEV_ORIGIN + "/assets/crow.png",
                        "data": {"url": DEV_ORIGIN + "/assets/crow.png"}}]
-        records.append({"kind": "beat", "cid": CID, "wall": srv, "perf": i * 1000,
+        records.append({"kind": "beat", "cid": cid, "wall": srv, "perf": i * 1000,
                         "raf": 60, "vis": "visible", "pulse": _pulse(i, i),
                         "events": events, "dropped": 0, "srv": srv})
     srv += 1000
-    records.append({"kind": "err", "cid": CID, "wall": srv,
+    records.append({"kind": "err", "cid": cid, "wall": srv,
                     "msg": "Uncaught TypeError: failed to load " + DEV_ORIGIN + "/src/game.ts",
                     "stack": "TypeError: x is undefined\n    at update ("
                              + DEV_ORIGIN + "/src/game.ts:67:30)",
                     "events": [], "srv": srv})
     srv += 1000
-    records.append({"kind": "bye", "cid": CID, "wall": srv, "events": [], "srv": srv})
+    records.append({"kind": "bye", "cid": cid, "wall": srv, "events": [], "srv": srv})
     return records
 
 
@@ -98,11 +115,16 @@ def live_run(tmp_path_factory):
 
     source_dir = work / "captures"
     # Two captures, so "newest wins" has something to choose between. The older
-    # one carries twice the beats, which makes the wrong choice obvious.
+    # one carries three times the beats, which makes the wrong choice obvious.
+    #
+    # The newer file holds two page loads, one per origin. A session file is
+    # not a page load, and the two origins the reference treats differently
+    # both have to travel through one run.
     older = source_dir / "session-2026-09-11T08-00-00-000Z.jsonl"
     newer = source_dir / "session-2026-09-11T09-00-00-000Z.jsonl"
-    write_log(older, capture(1_789_000_000_000, beats=9))
-    write_log(newer, capture(1_789_100_000_000, beats=3))
+    write_log(older, capture(1_789_000_000_000, 9, PUBLIC_ORIGIN, CID_OLDER))
+    write_log(newer, capture(1_789_100_000_000, 3, PUBLIC_ORIGIN, CID_PUBLIC)
+                     + capture(1_789_200_000_000, 2, DEV_PORT_ORIGIN, CID_LOCAL))
     # The modification times are set the wrong way round on purpose. demo.sh
     # picks on the timestamp in the filename, so the file named 09:00 has to
     # win even though the file named 08:00 was touched more recently.
@@ -153,7 +175,7 @@ def test_an_empty_capture_directory_fails_with_a_reason(tmp_path):
 
 
 def test_the_newest_capture_wins(live_run):
-    """One page load, from the later file. The older file has nine beats.
+    """Two page loads, from the later file. The older file has nine beats.
 
     The fixture gives the older file the more recent modification time, so a
     run that sorted on mtime would read nine beats and fail here.
@@ -161,8 +183,8 @@ def test_the_newest_capture_wins(live_run):
     with warehouse(live_run) as con:
         sessions, beats = con.execute(
             "SELECT count(*), (SELECT count(*) FROM beats) FROM sessions").fetchone()
-    assert sessions == 1
-    assert beats == 3
+    assert sessions == 2
+    assert beats == 5
 
 
 def test_the_contract_reconciles_on_a_live_capture(live_run):
@@ -196,7 +218,47 @@ def test_the_full_user_agent_never_lands(live_run):
 def test_the_recorders_own_client_id_survives(live_run):
     """DEF-09, pinned. A real UUID has to read as text, not as a UUID column."""
     with warehouse(live_run) as con:
-        client_id, native = con.execute(
-            "SELECT client_id, has_native_client_id FROM sessions").fetchone()
-    assert client_id == CID
-    assert native is True
+        rows = con.execute(
+            "SELECT client_id, has_native_client_id FROM sessions ORDER BY hello_srv"
+        ).fetchall()
+    assert rows == [(CID_PUBLIC, True), (CID_LOCAL, True)]
+
+
+# ---------------------------------------------------------------------------
+# The origin. Data on this disk, a reference decision at the boundary.
+# ---------------------------------------------------------------------------
+def test_the_typed_layer_keeps_the_origin_the_page_came_from(live_run):
+    """Derived from href, because the wire format carries no origin field."""
+    with warehouse(live_run) as con:
+        rows = con.execute(
+            "SELECT origin, origin_kind, origin_may_publish FROM sessions "
+            "ORDER BY hello_srv").fetchall()
+    assert rows == [(PUBLIC_ORIGIN, "public", True),
+                    (DEV_PORT_ORIGIN, "local", False)]
+
+
+def test_the_published_build_keeps_its_origin_on_the_site(live_run):
+    """The headline case. A capture from the public build says so in public."""
+    import duckdb
+
+    path = (live_run / "warehouse" / "curated" / "session_summary.parquet").as_posix()
+    rows = duckdb.connect().execute(
+        f"SELECT origin, origin_kind FROM read_parquet('{path}') ORDER BY origin_kind"
+    ).fetchall()
+    # The withheld page load keeps its class and loses its host.
+    assert rows == [(None, "local"), (PUBLIC_ORIGIN, "public")]
+
+
+def test_no_published_file_carries_a_withheld_origin(live_run):
+    """The publish decision, checked on the bytes rather than on one column."""
+    carriers = [p.name for p in sorted((live_run / "warehouse" / "curated").glob("*.parquet"))
+                if DEV_PORT_ORIGIN.encode() in p.read_bytes()]
+    assert carriers == []
+
+
+def test_a_masked_origin_keeps_its_class_in_the_evidence(live_run):
+    """Masking removes the host, not the record. The path still reads."""
+    with warehouse(live_run) as con:
+        messages = [row[0] for row in con.execute("SELECT msg FROM errors").fetchall()]
+    assert messages
+    assert all(m.endswith("http://private.invalid/src/game.ts") for m in messages)

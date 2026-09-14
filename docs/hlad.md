@@ -48,7 +48,7 @@ flowchart LR
 | 2 | The sink appends one JSON object per line | HTTP body | `fixtures/raw/*.jsonl` | The sink stamps `srv` on arrival |
 | 3 | `00_raw.sql` reads the JSONL under a fixed column set | JSONL, `wire_schema.jsonl` | `warehouse/raw/**/*.parquet` | One record of each kind fixes the columns |
 | 4 | `10_typed.sql` builds `landed` | `raw` | `landed` view | A `hello` increments `page_load_seq`. `client_id` falls back to `session_id#seq` |
-| 5 | `10_typed.sql` writes `quarantine` | `landed` | `quarantine` table | Ten contract rules, each with a reason |
+| 5 | `10_typed.sql` writes `quarantine` | `landed` | `quarantine` table | Eleven contract rules, each with a reason |
 | 6 | `10_typed.sql` defines `clean` | `landed`, `quarantine` | `clean` view | `clean` is `landed` minus `quarantine` |
 | 7 | `10_typed.sql` unnests `clean` into eight entities | `clean` | 8 tables | Four nested columns flatten into child rows |
 | 8 | `20_curated.sql` defines eleven views | entities | views | Every business number lives here, and only here |
@@ -136,6 +136,7 @@ same data, so a wider range is possible in production.
 | `ref_modes` | view | 3 | one documented mode |
 | `ref_chars` | view | 5 | one documented character |
 | `ref_bosses` | view | 4 | one documented boss |
+| `ref_origins` | view | 6 | one known request origin |
 | `contract_caps` | table | 5 | one cap |
 
 ### 3.2 Columns, by unit family
@@ -180,6 +181,7 @@ not constraints.
 | `session_id` | 24 | `2026-08-30T14-58-28-391Z` |
 | `client_id` | 26 | `2026-08-30T14-58-28-391Z#1` |
 | `href` | 17 | `http://localhost/` |
+| `sessions.origin` | 16 | `http://localhost` |
 | `ua` | 6 | `Chrome` |
 | `errors.msg` | 74 | an uncaught TypeError message |
 | `errors.stack` | 518 | a multi-frame stack trace |
@@ -193,7 +195,9 @@ not constraints.
 | `blockers.snipeKeyName` | 5 | `Shift` |
 
 > **Note.** The sanitizer rewrites `href` and `ua` before the fixtures reach the
-> repository. Production values run longer.
+> repository. Production values run longer. A live capture takes the other
+> route and keeps an origin that `fixtures/reference/origins.csv` lists, so
+> `sessions.origin` there can read `https://mrbisonte.github.io` instead.
 
 ### 3.5 Enumerated domains
 
@@ -209,6 +213,7 @@ not constraints.
 | `trace_level` | `off`, `time`, `ops` | no |
 | `span` | `sim`, `tiles`, `fog`, `bodies`, `vignette`, `hud` | no |
 | `spans.origin` | `alarm_trace`, `beat_trace` | no |
+| `sessions.origin_kind` | `local`, `private`, `public`, `unlisted` | no |
 
 ---
 
@@ -262,6 +267,9 @@ erDiagram
         bigint bye_srv "epoch ms, null if no bye"
         bigint last_srv "epoch ms"
         varchar href
+        varchar origin "scheme, host and port from href"
+        varchar origin_kind "enum, 4"
+        boolean origin_may_publish "the reference decision"
         varchar ua
         bigint dpr "ratio"
         bigint beats "count"
@@ -573,6 +581,8 @@ still add up. That is the point of the quarantine relation.
 | 7 | `blockers.frozen` and `blockers.dashing` read 0 in every fixture row | fixtures | Open, no evidence |
 | 8 | Observed ranges come from 3 sessions. A wider range is likely | fixtures | Accepted |
 | 9 | `dim_app_state` stays Type 1. Reclassifying `is_run_state` rewrites `fact_run.sim_active_s` for every past run. A Type 2 here needs a surrogate key on the fact and a date the CSVs do not carry | pipeline | Open, needs approval |
+| 10 | `may_publish` governs `sessions.origin` and nothing else. A withheld origin that lands inside free text, such as `errors.msg`, would still reach the site. `tests/test_live_path.py` scans the published bytes for one, which catches it rather than preventing it | pipeline | Open, needs approval |
+| 11 | No capture from `https://mrbisonte.github.io` exists yet. The recorder does not ship in the published build, so every origin claim above rests on a synthetic capture | crow-archer | Open, external |
 
 ---
 
