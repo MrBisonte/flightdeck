@@ -76,6 +76,7 @@ that throttling does not explain.
 | `loss_accounting` | How much telemetry did the system lose? |
 | `dimension_coverage` | Which documented values did nobody play? |
 | `quarantine` | Which records failed the contract, and why? |
+| `sessions` | Which deployment did each page load come from? |
 | `fact_run` | What happened in one run, at the run grain rather than the page load? |
 | `character_usage` | Which characters do players pick, and how many kills do they get? |
 | `reference_history` | What did the playbook say about this character before, and when did it change? |
@@ -88,7 +89,7 @@ that throttling does not explain.
 | `contracts/flight_log.yml` | The data contract: enums, caps, required fields |
 | `contracts/wire_schema.jsonl` | One record of each kind. Fixes the column set |
 | `fixtures/raw/` | Three real sessions, sanitized |
-| `fixtures/reference/` | The documented domain, as CSV. The second source |
+| `fixtures/reference/` | The documented domain as CSV, the second source, plus the origins a capture may keep |
 | `pipeline/` | The seven pipeline steps, in order |
 | `scripts/` | The sanitizer, a credential scan, an STE doc check |
 | `site/` | The analytics site over the curated Parquet |
