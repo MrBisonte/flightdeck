@@ -5,9 +5,9 @@
 -- 1. A session file is not a page load. The sink writes one file per dev server
 --    run, and a single file holds every page load that happened during it. The
 --    fixtures hold 16 hello records across 3 files. Event ids restart at 1 on
---    every page load, so the file name alone cannot key anything. page_load_seq
---    segments the file on hello; client_id prefers the recorder own cid when
---    the wire format carries it.
+--    every page load, so the file name alone cannot key anything. client_id is
+--    the page load's identity, from the recorder's own cid; page_load_seq ranks
+--    those clients by when each one first arrived.
 --
 -- 2. Nothing is dropped. A row that violates the contract is written to
 --    quarantine with a reason and excluded from the clean relations, so the
@@ -56,20 +56,53 @@ INSERT INTO contract_caps VALUES
 
 CREATE OR REPLACE MACRO cap(n) AS (SELECT value FROM contract_caps WHERE name = n);
 
+-- page_load_seq numbers the page loads in a file. client_id says which one a
+-- record belongs to, and it is what decides the number.
+--
+-- Counting hello records by arrival was the earlier derivation, and it holds
+-- only while one browser posts at a time. Two at once share a sink, so after
+-- the second hello every record from both carries the same number: the counter
+-- moves on hello and on nothing else. Every window in this warehouse partitions
+-- on (session_id, page_load_seq), so two players' pulses, interleaved by
+-- arrival, read as one page load changing state once a second. DEF-16 reports
+-- 333 runs from a session that held one.
+--
+-- Ranking each client by its first arrival keeps the column meaning what its
+-- name says, and keeps the numbers 1, 2, 3 in the order the page loads opened.
 CREATE OR REPLACE VIEW landed AS
+WITH counted AS (
+    SELECT
+        *,
+        -- How many page loads have said hello in this file by the time this
+        -- record arrives. Zero means the record precedes every hello, which is
+        -- the orphan the quarantine names below.
+        CAST(sum(CASE WHEN kind = 'hello' THEN 1 ELSE 0 END)
+            OVER (PARTITION BY session_id ORDER BY srv ROWS UNBOUNDED PRECEDING)
+            AS INTEGER) AS hellos_so_far
+    FROM raw
+),
+identified AS (
+    SELECT
+        *,
+        -- The recorder's own cid when the wire format carries one. Without it
+        -- the arrival counter is the only identity available, which is the old
+        -- behaviour and the best a record with no cid allows.
+        coalesce(cid, session_id || '#' || CAST(hellos_so_far AS VARCHAR)) AS client_id
+    FROM counted
+),
+opened AS (
+    SELECT *, min(srv) OVER (PARTITION BY session_id, client_id) AS client_first_srv
+    FROM identified
+)
 SELECT
-    *,
-    -- INTEGER, not the HUGEINT a window sum returns by default. A HUGEINT lands
-    -- as DOUBLE in Parquet, so every consumer downstream has to cast it back.
-    CAST(sum(CASE WHEN kind = 'hello' THEN 1 ELSE 0 END)
-        OVER (PARTITION BY session_id ORDER BY srv ROWS UNBOUNDED PRECEDING) AS INTEGER)
+    * EXCLUDE (client_first_srv, hellos_so_far),
+    -- INTEGER, not the HUGEINT a window function returns by default. A HUGEINT
+    -- lands as DOUBLE in Parquet, so every consumer downstream casts it back.
+    CAST(dense_rank() OVER (PARTITION BY session_id ORDER BY client_first_srv) AS INTEGER)
         AS page_load_seq,
-    coalesce(cid, session_id || '#' || CAST(
-        sum(CASE WHEN kind = 'hello' THEN 1 ELSE 0 END)
-            OVER (PARTITION BY session_id ORDER BY srv ROWS UNBOUNDED PRECEDING) AS VARCHAR))
-        AS client_id,
+    hellos_so_far = 0 AS precedes_first_hello,
     cid IS NOT NULL AS has_native_client_id
-FROM raw;
+FROM opened;
 
 --------------------------------------------------------------------------------
 -- Quarantine. Built before the clean relations, because they are defined as
@@ -79,10 +112,15 @@ CREATE OR REPLACE TABLE quarantine AS
 -- A record that arrives before the first hello of its file. The page was
 -- already open when the dev server restarted, so its goodbye landed in a file
 -- that never saw it say hello.
+--
+-- The flag, not `page_load_seq = 0`. The sequence used to start at zero for
+-- exactly these records and now ranks page loads from one, so the old test
+-- named a number rather than the condition and stopped matching when the
+-- number moved. See DEF-16.
 SELECT 'landed' AS relation, session_id, page_load_seq, srv, kind,
        'orphan_record_no_hello' AS reason,
        'record precedes the first hello in its session file' AS detail
-FROM landed WHERE page_load_seq = 0
+FROM landed WHERE precedes_first_hello
 UNION ALL
 SELECT 'pulses', session_id, page_load_seq, srv, kind, 'state_not_in_contract',
        'state=' || coalesce(pulse.state, '<null>')
@@ -136,10 +174,12 @@ UNION ALL
 SELECT 'landed', session_id, page_load_seq, srv, kind, 'srv_missing', 'srv IS NULL'
 FROM landed WHERE srv IS NULL;
 
--- Everything downstream reads this, never landed directly.
+-- Everything downstream reads this, never landed directly. The two conditions
+-- are the two quarantine reasons that apply to a whole record, so clean and
+-- quarantine stay each other's complement and the counts reconcile.
 CREATE OR REPLACE VIEW clean AS
 SELECT * FROM landed
-WHERE page_load_seq > 0 AND srv IS NOT NULL;
+WHERE NOT precedes_first_hello AND srv IS NOT NULL;
 
 --------------------------------------------------------------------------------
 -- The documented relations.

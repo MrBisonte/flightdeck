@@ -47,7 +47,7 @@ flowchart LR
 | 1 | The recorder posts a batch | game state | HTTP body | At most 1,000,000 bytes per body |
 | 2 | The sink appends one JSON object per line | HTTP body | `fixtures/raw/*.jsonl` | The sink stamps `srv` on arrival |
 | 3 | `00_raw.sql` reads the JSONL under a fixed column set | JSONL, `wire_schema.jsonl` | `warehouse/raw/**/*.parquet` | One record of each kind fixes the columns |
-| 4 | `10_typed.sql` builds `landed` | `raw` | `landed` view | A `hello` increments `page_load_seq`. `client_id` falls back to `session_id#seq` |
+| 4 | `10_typed.sql` builds `landed` | `raw` | `landed` view | `client_id` is the recorder's `cid`, and `page_load_seq` ranks each client by its first arrival |
 | 5 | `10_typed.sql` writes `quarantine` | `landed` | `quarantine` table | Eleven contract rules, each with a reason |
 | 6 | `10_typed.sql` defines `clean` | `landed`, `quarantine` | `clean` view | `clean` is `landed` minus `quarantine` |
 | 7 | `10_typed.sql` unnests `clean` into eight entities | `clean` | 8 tables | Four nested columns flatten into child rows |
@@ -240,7 +240,7 @@ erDiagram
         varchar session_id PK "file stem"
         bigint srv PK "arrival, epoch ms"
         varchar kind PK "record kind"
-        integer page_load_seq "0 means orphan"
+        integer page_load_seq "1 or more"
         varchar client_id "cid, or session_id#seq"
     }
     QUARANTINE {
@@ -582,7 +582,7 @@ still add up. That is the point of the quarantine relation.
 | 8 | Observed ranges come from 3 sessions. A wider range is likely | fixtures | Accepted |
 | 9 | `dim_app_state` stays Type 1. Reclassifying `is_run_state` rewrites `fact_run.sim_active_s` for every past run. A Type 2 here needs a surrogate key on the fact and a date the CSVs do not carry | pipeline | Open, needs approval |
 | 10 | `may_publish` governs `sessions.origin` and nothing else. A withheld origin that lands inside free text, such as `errors.msg`, would still reach the site. `tests/test_live_path.py` scans the published bytes for one, which catches it rather than preventing it | pipeline | Open, needs approval |
-| 11 | No capture from `https://mrbisonte.github.io` exists yet. The recorder does not ship in the published build, so every origin claim above rests on a synthetic capture | crow-archer | Open, external |
+| 11 | No capture from `https://mrbisonte.github.io` exists yet. The recorder ships in a release build on a crow-archer branch, and that branch is not deployed, so every claim about the published origin rests on a synthetic capture | crow-archer | Open, external |
 
 ---
 
