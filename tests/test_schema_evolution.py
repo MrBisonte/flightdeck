@@ -170,3 +170,64 @@ def test_uuid_and_fallback_ids_coexist(run_pipeline):
     ids = [r[0] for r in con.execute(
         "SELECT client_id FROM sessions ORDER BY page_load_seq").fetchall()]
     assert ids == ["00a71a80-8ac9-4ecd-8b7d-c2998328d48f", "cid-m1x2y3-ab12cd34"]
+
+
+def interleaved() -> list[dict]:
+    """Two page loads open at once, their records interleaved by arrival.
+
+    What a shared sink sees the moment two people play. The first client opens,
+    stays in `menu` and keeps beating; the second opens a second later and
+    plays. Both post to the same file, so the lines alternate.
+    """
+    def beat(cid: str, srv: int, state: str) -> dict:
+        return {
+            "kind": "beat", "cid": cid, "wall": srv - 1, "perf": 1000, "raf": 60,
+            "vis": "visible",
+            "pulse": {"state": state, "mode": "brawl", "map": "forest",
+                      "char": "archer", "t": 1.0, "lastTs": 1000, "live": True,
+                      "held": 0, "hp": 9, "kills": 0, "crows": 0, "skels": 0,
+                      "soldiers": 0, "arrows": 0, "boss": None},
+            "events": [], "srv": srv,
+        }
+
+    def hello(cid: str, srv: int) -> dict:
+        return {"kind": "hello", "cid": cid, "wall": srv - 1, "href": "http://localhost/",
+                "ua": "Chrome", "dpr": 1, "srv": srv}
+
+    records = [hello("idle-tab", 1_788_000_000_000)]
+    records += [beat("idle-tab", 1_788_000_000_000 + n * 1000, "menu") for n in range(1, 4)]
+    records.append(hello("player", 1_788_000_001_500))
+    for n in range(1, 4):
+        records.append(beat("player", 1_788_000_001_500 + n * 1000, "playing"))
+        records.append(beat("idle-tab", 1_788_000_004_000 + n * 1000, "menu"))
+    return sorted(records, key=lambda r: r["srv"])
+
+
+def test_two_page_loads_at_once_are_two_page_loads(run_pipeline):
+    """DEF-16. Counting hello by arrival gave both of them the same number.
+
+    Every window in this warehouse partitions on (session_id, page_load_seq),
+    so one number across two browsers read as a single page load changing state
+    once a second. On a real capture that turned one run into 333.
+    """
+    con = run_pipeline(interleaved())
+    rows = con.execute(
+        "SELECT page_load_seq, client_id, count(*) "
+        "FROM clean GROUP BY ALL ORDER BY page_load_seq").fetchall()
+    assert [(seq, cid) for seq, cid, _ in rows] == [(1, "idle-tab"), (2, "player")]
+
+
+def test_page_load_seq_ranks_by_when_each_client_opened(run_pipeline):
+    """The idle tab said hello first, so it is 1 even though it beats last."""
+    con = run_pipeline(interleaved())
+    first, = con.execute(
+        "SELECT client_id FROM clean WHERE page_load_seq = 1 LIMIT 1").fetchone()
+    assert first == "idle-tab"
+
+
+def test_a_state_belongs_to_the_client_that_reported_it(run_pipeline):
+    """The failure DEF-16 actually caused: one page load holding both states."""
+    con = run_pipeline(interleaved())
+    states = dict(con.execute(
+        "SELECT page_load_seq, count(DISTINCT state) FROM pulses GROUP BY 1").fetchall())
+    assert states == {1: 1, 2: 1}

@@ -4,7 +4,18 @@
 -- the same open files feed PostgreSQL, the PostHog exporter, and a Snowflake
 -- COPY INTO, with no engine in the middle claiming ownership of the data.
 
-COPY (SELECT * FROM session_summary)    TO 'warehouse/curated/session_summary.parquet'    (FORMAT PARQUET, COMPRESSION ZSTD);
+-- The publish decision on the origin, and the only place it is taken.
+--
+-- This directory is the public boundary. Everything to the left of it sits on
+-- one disk, so the typed layer holds the origin a session really came from.
+-- Here the reference decides: an origin publishes only when origins.csv says
+-- it may. origin_kind and origin_may_publish always publish, because a class
+-- names no host and the decision is evidence a reader can check.
+--
+-- REPLACE rather than a column list. Listing the other sixteen columns here
+-- would be a second copy of session_summary, and a copy drifts.
+COPY (SELECT * REPLACE (CASE WHEN origin_may_publish THEN origin END AS origin)
+        FROM session_summary)           TO 'warehouse/curated/session_summary.parquet'    (FORMAT PARQUET, COMPRESSION ZSTD);
 COPY (SELECT * FROM frame_time_by_span) TO 'warehouse/curated/frame_time_by_span.parquet' (FORMAT PARQUET, COMPRESSION ZSTD);
 -- spans is the per sample detail behind frame_time_by_span, from the typed
 -- layer. Published so a reader can see the distribution, not only p50 and p95.
