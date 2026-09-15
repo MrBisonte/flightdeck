@@ -31,6 +31,12 @@ enums:
   alarm_class: [loop-dead, logic-freeze, no-frames]
   trace_level: [off, time, ops]
   visibility: [visible, hidden]
+  # The class of the request origin. Derived from hello.href in
+  # pipeline/10_typed.sql, never sent on the wire, so version stays at 1.
+  # fixtures/reference/origins.csv names the origins themselves, one row each.
+  # `unlisted` is what the join produces when no row matches. No reference row
+  # carries it, and tests/test_contract.py pins that.
+  origin_kind: [local, private, public, masked, unlisted]
   # Frame sections, in the order they run.
   span: [sim, tiles, fog, bodies, vignette, hud]
 

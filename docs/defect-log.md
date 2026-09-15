@@ -4,20 +4,20 @@ Every defect found while building this repository: what broke, why, and what
 fixed it.
 
 The log exists because a pipeline that claims to find problems in other people's
-data has to account for the problems in its own build. This log lists fourteen
-defects. All fourteen are closed.
+data has to account for the problems in its own build. This log lists sixteen
+defects. All sixteen are closed.
 
 ## Summary
 
 | Severity | Count | Meaning |
 |---|---|---|
-| High | 8 | Would reach a user, break the demo, or disclose information |
-| Medium | 6 | Caught inside the build, or degrades quality without breaking it |
+| High | 9 | Would reach a user, break the demo, or disclose information |
+| Medium | 7 | Caught inside the build, or degrades quality without breaking it |
 
 | Category | Count |
 |---|---|
 | Data contract and schema | 3 |
-| Tooling and gates | 7 |
+| Tooling and gates | 8 |
 | Build and packaging | 2 |
 | Process | 2 |
 
@@ -27,22 +27,22 @@ The table shows which control earned its place.
 
 | Found by | Count | Defects |
 |---|---|---|
-| Running a gate | 2 | DEF-01, DEF-03 |
+| Running a gate | 3 | DEF-01, DEF-03, DEF-15 |
 | Unit or integration test | 3 | DEF-02, DEF-04, DEF-11 |
-| Live rehearsal | 4 | DEF-08, DEF-09, DEF-13, DEF-14 |
+| Live rehearsal | 5 | DEF-08, DEF-09, DEF-13, DEF-14, DEF-16 |
 | CI | 2 | DEF-05, DEF-06 |
 | Manual check | 2 | DEF-07, DEF-12 |
 | Peer review | 1 | DEF-10 |
 
 ```
-   tests + gates   ->  5 defects   found before anything ran end to end
+   tests + gates   ->  6 defects   found before anything ran end to end
    CI              ->  2 defects   found on a clean machine, not this one
-   rehearsal       ->  4 defects   found only by running the real path
+   rehearsal       ->  5 defects   found only by running the real path
    review          ->  1 defect    found only by a second reader
 ```
 
-Only a live capture reached DEF-08, DEF-09, DEF-13 and DEF-14, and no test
-found them. That is the argument for rehearsing rather than assuming.
+Only a live capture reached DEF-08, DEF-09, DEF-13, DEF-14 and DEF-16, and no
+test found them. That is the argument for rehearsing rather than assuming.
 
 ## The register
 
@@ -246,16 +246,51 @@ only correct until someone adds a field.
 same shape as DEF-03 and DEF-11. A control that reports without a reason costs
 more than it saves.
 
+### DEF-15. A committed fixture kept a dev server port
+
+| Field | Detail |
+|---|---|
+| **Severity** | Medium |
+| **Category** | Tooling and gates |
+| **Symptom** | One fixture carried `http://localhost:8090/src/sim/pathfinding.ts` inside a nested event body. `fixtures/SANITIZATION.md` says the scrub removes that port |
+| **Root cause** | The gate allowed any host reading `localhost`, port and all. The scrub that walks the whole record arrived with DEF-13, and nobody ran it again over the already committed files. The gate could not tell a stale fixture from a fresh one, so it reported clean |
+| **Resolution** | The gate names the origins a file may carry instead of matching a host shape. A fixture may carry only the scrub output, `http://localhost`. A file the current scrub did not write now fails. The one stale file went through the scrub again, which moved one line and no record count |
+| **Found by** | Running a gate, after tightening it to an allowlist |
+| **Fixed in** | this commit |
+
+**Note.** The pattern is DEF-03 and DEF-11 again. The check ran, it passed, and
+it tested less than its documentation claimed. Replacing a shape match with a
+list of known values is what made the difference.
+
+### DEF-16. Two page loads at once counted as one
+
+| Field | Detail |
+|---|---|
+| **Severity** | High |
+| **Category** | Data contract and schema |
+| **Symptom** | A capture holding one real run reported 333 runs, one character, and 211 boss encounters with no outcome |
+| **Root cause** | `page_load_seq` counted `hello` records by arrival within a file. The counter moves on `hello` and on nothing else, so once a second browser said hello every record from both carried the same number. Every window in the warehouse partitions on `(session_id, page_load_seq)`, so two players' pulses interleaved by arrival read as one page load changing state once a second, and every `in_run` pulse looked preceded by a not-`in_run` one |
+| **Resolution** | `client_id` decides the number. Each client is ranked by when it first arrived, so the column means what its name says. The orphan quarantine rule and the `clean` filter both named `page_load_seq = 0` and now name the condition itself, `precedes_first_hello` |
+| **Found by** | Live rehearsal, with a second browser left recording during the session |
+| **Fixed in** | this commit |
+
+**Note.** The wire format has carried `cid` since round 6, and `client_id`
+already used it. Only the sequence was still counting arrivals. The defect
+could not appear on the committed fixtures, because one person on one machine
+never has two page loads open at once. A deployment is the case where that
+stops being true.
+
 ## What the log says
 
-Three patterns come out of fourteen entries.
+Three patterns come out of sixteen entries.
 
-1. **Controls that always pass are invisible.** DEF-03 and DEF-11 both produced
-   a green result over a broken check. Both needed something outside the check
-   to notice.
+1. **Controls that always pass are invisible.** DEF-03, DEF-11 and DEF-15 all
+   produced a green result over a check that tested less than it claimed. Each
+   one needed something outside the check to notice.
 2. **Some defects need the real path.** DEF-08 and DEF-09 survived a full test
    suite and appeared within minutes of a live capture. DEF-14 needed the path
-   run twice, from two directories.
+   run twice, from two directories. DEF-16 needed two browsers at once, which
+   no fixture and no test had ever arranged.
 3. **Some defects need a second reader.** DEF-10 passed every automated gate.
    Review caught it.
 

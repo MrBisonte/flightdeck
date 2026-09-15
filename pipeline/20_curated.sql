@@ -23,6 +23,12 @@ SELECT s.session_id,
        s.client_id,
        s.has_native_client_id,
        s.ua,
+       -- Where the page load came from. The class always travels, because it
+       -- names no host. The origin itself travels only as far as
+       -- pipeline/25_publish.sql lets it.
+       s.origin,
+       s.origin_kind,
+       s.origin_may_publish,
        round(s.duration_s, 1)                          AS duration_s,
        s.beats,
        s.alarms,

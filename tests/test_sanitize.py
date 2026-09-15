@@ -7,7 +7,8 @@ import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "scripts"))
 
-from sanitize_flightlog import browser_family, check_clean, sanitize_record, scrub_origins
+from sanitize_flightlog import (browser_family, check_clean, listed_origins, mask_origins,
+                                MASK, sanitize_record, scrub_origins)
 
 
 @pytest.mark.parametrize(
@@ -121,31 +122,92 @@ def test_scrub_reaches_a_nested_event_body():
 
 
 def test_check_clean_flags_a_remote_origin(tmp_path):
-    """The gate reported clean while a private address sat in the output."""
+    """The gate reported clean while a private address sat in the output.
+
+    The rule behind this test moved. It used to read "the host is not
+    localhost", which refused a capture from the published build. It now reads
+    "no reference row names this origin", which refuses the same address for a
+    better reason and keeps the DEF-13 outcome.
+    """
     bad = tmp_path / "bad.jsonl"
     bad.write_text(
         json.dumps({"kind": "err", "msg": "boom at http://192.168.1.50:5173/x.js"}) + "\n",
         encoding="utf-8")
-    assert any("non-local origin" in p for p in check_clean(bad))
+    assert any("unlisted origin" in p for p in check_clean(bad))
 
 
-@pytest.mark.parametrize("href", [
-    "http://localhost/",
-    "http://localhost",
-    "http://localhost:5173/game",
-    "https://localhost/game",
-])
-def test_check_clean_allows_the_localhost_host(tmp_path, href):
+@pytest.mark.parametrize("href", ["http://localhost/", "http://localhost"])
+def test_check_clean_allows_the_scrubbed_fixture_origin(tmp_path, href):
     ok = tmp_path / "ok.jsonl"
     ok.write_text(json.dumps({"kind": "hello", "ua": "Chrome", "href": href}) + "\n",
                   encoding="utf-8")
     assert check_clean(ok) == []
 
 
-def test_check_clean_flags_a_host_that_only_starts_with_localhost(tmp_path):
-    """localhost.evil.com is not localhost."""
+@pytest.mark.parametrize("href", ["http://localhost:5173/game", "https://localhost/game"])
+def test_check_clean_flags_an_unlisted_localhost(tmp_path, href):
+    """Default-deny reaches localhost too.
+
+    A fixture may carry only what the hard scrub produces. A port or a scheme
+    the scrub never writes means the file did not come from the scrub, which is
+    exactly how a stale fixture kept a dev server port. See DEF-15.
+    """
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text(json.dumps({"kind": "hello", "ua": "Chrome", "href": href}) + "\n",
+                   encoding="utf-8")
+    assert any("unlisted origin" in p for p in check_clean(bad))
+
+
+# ---------------------------------------------------------------------------
+# The live route. A listed origin is data; everything else is masked.
+# ---------------------------------------------------------------------------
+def test_mask_keeps_a_listed_origin_verbatim():
+    stack = "at update (https://mrbisonte.github.io/crow-archer/game.ts:67:30)"
+    assert mask_origins(stack) == stack
+
+
+def test_mask_replaces_an_unlisted_origin():
+    out = mask_origins("boom at http://192.168.1.50:5173/src/game.ts:1:2")
+    assert "192.168.1.50" not in out
+    assert out.endswith(f"{MASK}/src/game.ts:1:2")
+
+
+def test_mask_reaches_a_nested_event_body():
+    """The live route walks the record, exactly as the scrub does."""
+    rec = sanitize_record({
+        "kind": "beat",
+        "events": [{"id": 1, "message": "fetch failed from http://192.168.1.50:5173/a.png",
+                    "data": {"url": "http://192.168.1.50:5173/a.png"}}],
+    }, mask_origins)
+    assert "192.168.1.50" not in json.dumps(rec)
+    assert rec["events"][0]["data"]["url"] == f"{MASK}/a.png"
+
+
+def test_masking_is_idempotent():
+    """A mask is itself a listed origin, so a second pass changes nothing."""
+    once = mask_origins("boom at http://192.168.1.50:5173/a.js")
+    assert mask_origins(once) == once
+
+
+def test_the_mask_is_a_listed_origin():
+    """Otherwise the gate would refuse the sanitizer's own output."""
+    assert MASK in listed_origins()
+
+
+def test_the_live_gate_accepts_a_listed_public_origin(tmp_path):
+    """The point of the change. A capture from the published build passes."""
+    ok = tmp_path / "ok.jsonl"
+    ok.write_text(json.dumps({"kind": "hello", "ua": "Chrome",
+                              "href": "https://mrbisonte.github.io/crow-archer/"}) + "\n",
+                  encoding="utf-8")
+    assert check_clean(ok, listed_origins()) == []
+    # The same file fails the fixture gate, which allows the scrub output only.
+    assert any("unlisted origin" in p for p in check_clean(ok))
+
+
+def test_the_live_gate_still_refuses_an_unlisted_origin(tmp_path):
     bad = tmp_path / "bad.jsonl"
     bad.write_text(json.dumps({"kind": "hello", "ua": "Chrome",
-                               "href": "http://localhost.evil.com/game"}) + "\n",
+                               "href": "https://someone-elses.example/game"}) + "\n",
                    encoding="utf-8")
-    assert any("non-local origin" in p for p in check_clean(bad))
+    assert any("unlisted origin" in p for p in check_clean(bad, listed_origins()))
