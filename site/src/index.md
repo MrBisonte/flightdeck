@@ -61,17 +61,36 @@ queries are hidden in this view. Switch to Engineering, top right, to read them.
 
 ## How the data gets here
 
+A thick line means a network protocol carries the data. A solid line means the
+data crosses a process boundary through a file. A dotted line means it never
+leaves the process. Each label names the transport, then the format and the
+side that starts the exchange.
+
+The game writes the log.
+
 ```mermaid
 flowchart LR
-  game["browser game"] --> rec["flight recorder"]
-  rec --> sink["dev server sink"]
-  sink --> log[("session file")]
-  log --> pipe["pipeline"]
-  pipe --> site["this site"]
+  game["browser game"] -.->|"in process<br/>function call"| rec["flight recorder"]
+  rec ==>|"HTTP POST<br/>JSON batch, push"| dev["dev sink<br/>localhost"]
+  rec ==>|"HTTPS POST<br/>JSON batch, push"| fly["Fly sink<br/>crow-archer.fly.dev"]
+  dev -->|"append<br/>JSONL, push"| log[("session file")]
+  fly -->|"append<br/>JSONL, push"| log
+```
+
+The pipeline reads it.
+
+```mermaid
+flowchart LR
+  log[("session file")] -->|"read_json<br/>JSONL, pull"| pipe["pipeline"]
+  pipe -->|"COPY<br/>Parquet, push"| site["this site"]
+  site ==>|"HTTPS GET<br/>Parquet, pull"| reader["your browser tab"]
 ```
 
 The sink adds the arrival time as it writes. The pipeline calls that column
 `srv`, and it is the server clock in the two lines further up this page.
+
+The sample on this site came from the dev sink. The Fly sink answers today, and
+the published game build does not post to it yet.
 
 ## What is on this site
 
