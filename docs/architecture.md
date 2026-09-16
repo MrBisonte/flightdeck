@@ -17,22 +17,41 @@ One word has one meaning.
 | **relation** | One table or one view |
 | **clock** | One source of time. The system has four |
 
+## Reading the diagrams
+
+Every diagram in this repository uses the same notation. The line says how far
+the data travels. The label says what carries it.
+
+| Line | What it means |
+|---|---|
+| Thick | A network protocol carries the data |
+| Solid | The data crosses a process boundary through a file |
+| Dotted | The data never leaves the process |
+
+Each label reads on two lines. The transport comes first, then the payload
+format and the side that starts the exchange. `HTTPS POST` above
+`Parquet, pull` says the reader opens the connection and asks for Parquet.
+
+A diagram that carries no transport, such as the quarantine decision below,
+uses plain arrows and no labels.
+
 ## The system in one picture
 
 ```mermaid
-flowchart TB
+flowchart LR
   subgraph A["1. BROWSER, dev build only"]
     game["game loop"]
     ring["log ring<br/>500 entries"]
     rec["flight recorder"]
-    game --> ring --> rec
-    game -->|"pulse, 1 per second"| rec
+    game -.->|"in process<br/>call"| ring
+    ring -.->|"in process<br/>call"| rec
+    game -.->|"in process<br/>pulse, 1 per second"| rec
   end
 
   subgraph B["2. DEV SERVER"]
-    sink["flight sink"]
+    sink["flight sink<br/>POST /__flight"]
     log[("session file<br/>one JSON object per line")]
-    sink -->|"add srv, then append"| log
+    sink -->|"append<br/>JSONL, stamps srv"| log
   end
 
   subgraph C["3. PIPELINE, this repository"]
@@ -40,7 +59,12 @@ flowchart TB
     typed[("TYPED<br/>8 relations + quarantine")]
     cur[("CURATED<br/>11 views")]
     gold[("GOLD<br/>dimensions and facts,<br/>at the run grain")]
-    raw --> typed --> cur --> gold
+    pub[("PUBLISHED<br/>Parquet, ZSTD")]
+    raw -.->|"DuckDB SQL<br/>in process"| typed
+    typed -.->|"DuckDB SQL<br/>in process"| cur
+    cur -.->|"DuckDB SQL<br/>in process"| gold
+    cur -.->|"COPY<br/>in process"| pub
+    gold -.->|"COPY<br/>in process"| pub
   end
 
   subgraph D["4. CONSUMERS"]
@@ -49,14 +73,16 @@ flowchart TB
     site["static site<br/>queries in the browser"]
   end
 
-  rec -->|"beat: fetch"| sink
-  rec -.->|"alarm, err, bye: sendBeacon"| sink
-  log --> raw
-  ref[("reference CSV")] --> typed
-  gold --> pg
-  gold --> ph
-  gold --> site
+  rec ==>|"HTTP POST, fetch<br/>beat, push"| sink
+  rec ==>|"HTTP POST, sendBeacon<br/>alarm, err, bye, push"| sink
+  log -->|"read_json<br/>JSONL, pull"| raw
+  ref[("reference CSV")] -->|"read_csv<br/>CSV, pull"| typed
+  pub ==>|"libpq, TCP 55432<br/>rows, push"| pg
+  pub -->|"read_parquet, stdout<br/>OTLP and CloudEvents, pull"| ph
+  pub -->|"copy at build time<br/>Parquet, push"| site
 ```
+
+Notation: [reading the diagrams](#reading-the-diagrams).
 
 - A beat uses `fetch`.
 - An alarm, an error, and a goodbye use `sendBeacon`.
@@ -268,14 +294,32 @@ flowchart LR
   jsonl[("session file")] -->|sanitize| fix[("fixtures/raw")]
   fix -->|00_raw| rawp[("warehouse/raw<br/>session_date / session_id")]
   ref[("fixtures/reference")] --> typed
-  rawp -->|10_typed| typed[("sessions, beats, pulses,<br/>events, alarms, blockers,<br/>errors, spans")]
-  typed -->|20_curated| cur["11 views"]
-  cur -->|22_gold| gold["dimensions and facts"]
+  rawp -.->|10_typed| typed[("sessions, beats, pulses,<br/>events, alarms, blockers,<br/>errors, spans")]
+  typed -.->|20_curated| cur["11 views"]
+  cur -.->|22_gold| gold["dimensions and facts"]
   gold -->|25_publish| cparq[("warehouse/curated")]
-  cparq -->|30_load_postgres| pg[("postgres<br/>curated.*")]
+  cparq ==>|30_load_postgres| pg[("postgres<br/>curated.*")]
   cparq -->|40_export| ph["OTLP, CloudEvents"]
   cparq -->|site loader| web["site pages"]
 ```
+
+Notation: [reading the diagrams](#reading-the-diagrams). Each label names the
+code that moves the data. This table names the mechanism it uses.
+
+| Edge | Mechanism |
+|---|---|
+| session file to `fixtures/raw` | `sanitize_flightlog.py` reads and writes local files. No network |
+| `fixtures/raw` to `warehouse/raw` | DuckDB `read_json`, then `COPY` to Parquet, in one process |
+| `fixtures/reference` to the entities | DuckDB `read_csv`, in the same process |
+| raw to entities to views to gold | DuckDB SQL over one database file. Nothing crosses a socket |
+| gold to `warehouse/curated` | `COPY` to local disk, Parquet, ZSTD |
+| `warehouse/curated` to postgres | The DuckDB postgres extension, `ATTACH (TYPE POSTGRES)`, libpq over TCP 55432 |
+| `warehouse/curated` to the exporters | Python reads the Parquet and prints to stdout. No network call |
+| `warehouse/curated` to the site pages | The site loader copies the files into the static bundle at build time |
+
+The postgres edge is the one conditional edge. `30_load_postgres.py` falls back
+to a local DuckDB file when Docker does not answer, and that fallback crosses
+no socket.
 
 ## The process, step by step
 
