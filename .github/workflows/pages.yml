@@ -51,6 +51,22 @@ jobs:
           cache: npm
           cache-dependency-path: site/package-lock.json
 
+      # Framework pre-bundles its recommended libraries into client.js on
+      # every build, each at @latest, whether or not the site imports them.
+      # Restoring its npm cache means the build resolves nothing over the
+      # network. resolveNpmVersion reads the directory names here and returns a
+      # satisfying version before it asks registry.npmjs.org, and
+      # populateNpmCache returns the path it already holds on disk.
+      #
+      # The key is constant on purpose. It restores on every run and saves only
+      # when it misses, so the versions stay put until someone bumps the
+      # suffix to ask for a refresh.
+      - name: Restore the Framework npm cache
+        uses: actions/cache@v6
+        with:
+          path: site/src/.observablehq/cache/_npm
+          key: observable-npm-v1
+
       # The site loader runs ./demo.sh build itself, so the pipeline runs here
       # and the published pages read the Parquet this run produced.
       #
