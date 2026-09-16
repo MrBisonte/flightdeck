@@ -42,21 +42,24 @@ flowchart LR
   published --> exporters([exporters])
 ```
 
-| # | Step | Reads | Writes | Rule it applies |
-|---|---|---|---|---|
-| 1 | The recorder posts a batch | game state | HTTP body | At most 1,000,000 bytes per body |
-| 2 | The sink appends one JSON object per line | HTTP body | `fixtures/raw/*.jsonl` | The sink stamps `srv` on arrival |
-| 3 | `00_raw.sql` reads the JSONL under a fixed column set | JSONL, `wire_schema.jsonl` | `warehouse/raw/**/*.parquet` | One record of each kind fixes the columns |
-| 4 | `10_typed.sql` builds `landed` | `raw` | `landed` view | `client_id` is the recorder's `cid`, and `page_load_seq` ranks each client by its first arrival |
-| 5 | `10_typed.sql` writes `quarantine` | `landed` | `quarantine` table | Eleven contract rules, each with a reason |
-| 6 | `10_typed.sql` defines `clean` | `landed`, `quarantine` | `clean` view | `clean` is `landed` minus `quarantine` |
-| 7 | `10_typed.sql` unnests `clean` into eight entities | `clean` | 8 tables | Four nested columns flatten into child rows |
-| 8 | `20_curated.sql` defines eleven views | entities | views | Every business number lives here, and only here |
-| 9 | `22_gold.sql` builds seventeen dimensions, facts and metric views | entities, reference views | tables | The run grain, which a page load does not give |
-| 10 | `25_publish.sql` copies 24 relations to Parquet | views, tables | `warehouse/curated/*.parquet` | ZSTD compression |
-| 11 | `30_load_postgres.py` loads twelve relations | Parquet | PostgreSQL | An explicit relation list, no globbing |
-| 12 | `40_export.py` prints payloads in three formats | Parquet | stdout, files | The exporter makes no network call |
-| 13 | The site queries the Parquet in the browser | Parquet | rendered page | The site holds no query the pipeline holds |
+This diagram shows the order of the steps. The table below names the transport
+each one uses, so the arrows here carry no notation.
+
+| # | Step | Transport | Reads | Writes | Rule it applies |
+|---|---|---|---|---|---|
+| 1 | The recorder posts a batch | HTTP POST, `fetch` or `sendBeacon`, push | game state | HTTP body | At most 1,000,000 bytes per body |
+| 2 | The sink appends one JSON object per line | local file append, push | HTTP body | `fixtures/raw/*.jsonl` | The sink stamps `srv` on arrival |
+| 3 | `00_raw.sql` reads the JSONL under a fixed column set | DuckDB `read_json`, in process, pull | JSONL, `wire_schema.jsonl` | `warehouse/raw/**/*.parquet` | One record of each kind fixes the columns |
+| 4 | `10_typed.sql` builds `landed` | DuckDB SQL, in process | `raw` | `landed` view | `client_id` is the recorder's `cid`, and `page_load_seq` ranks each client by its first arrival |
+| 5 | `10_typed.sql` writes `quarantine` | DuckDB SQL, in process | `landed` | `quarantine` table | Eleven contract rules, each with a reason |
+| 6 | `10_typed.sql` defines `clean` | DuckDB SQL, in process | `landed`, `quarantine` | `clean` view | `clean` is `landed` minus `quarantine` |
+| 7 | `10_typed.sql` unnests `clean` into eight entities | DuckDB SQL, in process | `clean` | 8 tables | Four nested columns flatten into child rows |
+| 8 | `20_curated.sql` defines eleven views | DuckDB SQL, in process | entities | views | Every business number lives here, and only here |
+| 9 | `22_gold.sql` builds seventeen dimensions, facts and metric views | DuckDB SQL, in process | entities, reference views | tables | The run grain, which a page load does not give |
+| 10 | `25_publish.sql` copies 24 relations to Parquet | `COPY` to local disk, push | views, tables | `warehouse/curated/*.parquet` | ZSTD compression |
+| 11 | `30_load_postgres.py` loads twelve relations | libpq over TCP 55432, push | Parquet | PostgreSQL | An explicit relation list, no globbing |
+| 12 | `40_export.py` prints payloads in three formats | local file read, then stdout | Parquet | stdout, files | The exporter makes no network call |
+| 13 | The site queries the Parquet in the browser | HTTPS GET, then DuckDB WebAssembly in the tab, pull | Parquet | rendered page | The site holds no query the pipeline holds |
 
 > **Warning.** Step 4 is the subtle one. A session file is not a page load. The
 > sink writes one file per dev server run. One file holds every page load of that
@@ -70,20 +73,26 @@ The flow above says what happens. This says where it happens.
 ```mermaid
 flowchart LR
   subgraph build[build machine]
-    sink[flight sink] --> rawp[(raw Parquet)]
-    rawp --> sqlp[pipeline SQL]
-    sqlp --> curp[(curated Parquet)]
-    curp --> bundle[(static bundle)]
+    sink[flight sink] -->|"append<br/>JSONL, push"| rawp[(raw Parquet)]
+    rawp -.->|"DuckDB SQL<br/>in process"| sqlp[pipeline SQL]
+    sqlp -.->|"COPY<br/>in process"| curp[(curated Parquet)]
+    curp -->|"copy<br/>build time, push"| bundle[(static bundle)]
+  end
+  subgraph db[docker, build machine]
+    pgdb[(PostgreSQL)]
   end
   subgraph host[GitHub Pages]
     served[(HTML, JS, Parquet)]
   end
   subgraph tab[reader's browser tab]
-    wasm[DuckDB WebAssembly] --> page[rendered page]
+    wasm[DuckDB WebAssembly] -.->|"in process<br/>Arrow, pull"| page[rendered page]
   end
-  bundle --> served
-  served -->|HTTP GET| wasm
+  curp ==>|"libpq, TCP 55432<br/>rows, push"| pgdb
+  bundle ==>|"upload-pages-artifact<br/>HTTPS, push"| served
+  served ==>|"HTTPS GET<br/>Parquet, pull"| wasm
 ```
+
+Notation: [reading the diagrams](architecture.md#reading-the-diagrams).
 
 | Component | Executes on | State it holds | A reader reaches it |
 |---|---|---|---|
