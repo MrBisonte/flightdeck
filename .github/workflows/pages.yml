@@ -51,10 +51,38 @@ jobs:
           cache: npm
           cache-dependency-path: site/package-lock.json
 
+      # Framework pre-bundles its recommended libraries into client.js on
+      # every build, each at @latest, whether or not the site imports them.
+      # Restoring its npm cache means the build resolves nothing over the
+      # network. resolveNpmVersion reads the directory names here and returns a
+      # satisfying version before it asks registry.npmjs.org, and
+      # populateNpmCache returns the path it already holds on disk.
+      #
+      # The key is constant on purpose. It restores on every run and saves only
+      # when it misses, so the versions stay put until someone bumps the
+      # suffix to ask for a refresh.
+      - name: Restore the Framework npm cache
+        uses: actions/cache@v6
+        with:
+          path: site/src/.observablehq/cache/_npm
+          key: observable-npm-v1
+
       # The site loader runs ./demo.sh build itself, so the pipeline runs here
       # and the published pages read the Parquet this run produced.
+      #
+      # Three attempts. A deploy died on `read ECONNRESET` while the build
+      # fetched a package from a CDN, and a re-run with no change fixed it. A
+      # shell loop rather than a marketplace action, because a loop adds no
+      # dependency.
       - name: Build the site
-        run: npm ci --prefix site && npm run build --prefix site
+        run: |
+          npm ci --prefix site
+          for attempt in 1 2 3; do
+            if npm run build --prefix site; then exit 0; fi
+            echo "site build attempt $attempt failed"
+            [ "$attempt" = 3 ] || sleep $((attempt * 15))
+          done
+          exit 1
 
       # enablement turns Pages on for the repository the first time this runs,
       # so nobody has to find the setting by hand. It needs a repository that
