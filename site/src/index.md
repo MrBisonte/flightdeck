@@ -89,8 +89,8 @@ flowchart LR
 The sink adds the arrival time as it writes. The pipeline calls that column
 `srv`, and it is the server clock in the two lines further up this page.
 
-The sample on this site came from the dev sink. The Fly sink answers today, and
-the published game build does not post to it yet.
+The sample on this site came from the dev sink. The published game posts to the
+Fly sink, and no capture from there has reached this pipeline yet.
 
 ## What is on this site
 
