@@ -53,8 +53,20 @@ jobs:
 
       # The site loader runs ./demo.sh build itself, so the pipeline runs here
       # and the published pages read the Parquet this run produced.
+      #
+      # Three attempts. A deploy died on `read ECONNRESET` while the build
+      # fetched a package from a CDN, and a re-run with no change fixed it. A
+      # shell loop rather than a marketplace action, because a loop adds no
+      # dependency.
       - name: Build the site
-        run: npm ci --prefix site && npm run build --prefix site
+        run: |
+          npm ci --prefix site
+          for attempt in 1 2 3; do
+            if npm run build --prefix site; then exit 0; fi
+            echo "site build attempt $attempt failed"
+            [ "$attempt" = 3 ] || sleep $((attempt * 15))
+          done
+          exit 1
 
       # enablement turns Pages on for the repository the first time this runs,
       # so nobody has to find the setting by hand. It needs a repository that
