@@ -38,7 +38,7 @@ uses plain arrows and no labels.
 ## The system in one picture
 
 ```mermaid
-flowchart TB
+flowchart LR
   subgraph A["1. BROWSER, dev build only"]
     game["game loop"]
     ring["log ring<br/>500 entries"]
