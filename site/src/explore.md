@@ -43,8 +43,8 @@ as every page here does.
 </div>
 <div class="only-dashboard">
 
-This page carries every published table. This view hides the catalog query.
-The box below still runs whatever you type.
+This page carries every published table, though this view hides the catalog
+query behind it. The box below still runs whatever you type.
 
 </div>
 
