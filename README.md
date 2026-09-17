@@ -9,9 +9,11 @@ A medallion pipeline over telemetry from a real browser game.
 ```
 
 The telemetry comes from the flight recorder in
-[crow-archer](https://github.com/MrBisonte/crow-archer). The three sessions in
-`fixtures/raw/` hold 1260 records of real play. Two sessions contain alarms and
-an uncaught error. One session is clean.
+[crow-archer](https://github.com/MrBisonte/crow-archer). The four sessions in
+`fixtures/raw/` hold 1546 records of real play. Two sessions contain alarms and
+an uncaught error. One is clean. The fourth came from the published build
+rather than a dev server, so the data carries two origins and the pages can
+compare them.
 
 Read [docs/architecture.md](docs/architecture.md) for the full picture. Read
 [docs/defect-log.md](docs/defect-log.md) for what broke on the way there.

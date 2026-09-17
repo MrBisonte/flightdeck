@@ -197,7 +197,7 @@ declines to guess one.
 
 ## What this page cannot tell you
 
-The sample is six runs from three sessions of real play. Read the shapes, not
+The sample is eight runs from four sessions of real play. Read the shapes, not
 the averages.
 
 Two limits come from the wire format rather than the sample size. There is no

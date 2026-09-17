@@ -136,12 +136,26 @@ clocks against it.
 
 | Measure | Value |
 |---|---|
-| Records compared | 1259 |
+| Records compared | 1545 |
 | Smallest difference | 0 ms |
-| Largest difference | 9 ms |
-| Mean difference | 0.92 ms |
+| Largest difference | 593 ms |
+| Mean difference | 89.32 ms |
 
-The clocks agree. The pipeline measures that rather than assuming it.
+That mean hides the finding, so split it by where the page came from.
+
+| Origin | Beats | Smallest | Mean | Largest |
+|---|---|---|---|---|
+| `http://localhost` | 1226 | 0 ms | 0.91 ms | 9 ms |
+| `https://mrbisonte.github.io` | 285 | 473 ms | 478.07 ms | 571 ms |
+
+On one machine the clocks agree to single milliseconds. From the published
+build they differ by about half a second, every time, with little spread. The
+difference is arrival minus the page clock. It holds the network hop and any
+time a record waited in the recorder's batch. This data cannot separate the
+two.
+
+The point is not the number. It is that one column tells you which deployment a
+record came from, so a mean over both is a question rather than an answer.
 
 ### Question 2: when did the page stop, and why?
 
@@ -173,7 +187,7 @@ flowchart LR
   f --> p3["page load 3<br/>hello ... no bye"]
 ```
 
-The three fixture files hold **16** page loads. Log event ids restart at 1 on
+The four fixture files hold **17** page loads. Log event ids restart at 1 on
 each page load. Therefore the file name identifies nothing useful.
 
 The pipeline builds the real key in two ways:
@@ -190,8 +204,8 @@ reads both, which `tests/test_schema_evolution.py` proves.
 
 ```mermaid
 flowchart LR
-  landed[("landed<br/>1260")] --> check{"meets the<br/>contract?"}
-  check -->|yes| clean[("clean<br/>1259")]
+  landed[("landed<br/>1546")] --> check{"meets the<br/>contract?"}
+  check -->|yes| clean[("clean<br/>1545")]
   check -->|"no + reason"| quar[("quarantine<br/>1")]
   clean --> out["8 relations"]
   quar --> out2["shipped with<br/>the curated layer"]
@@ -203,7 +217,7 @@ there carries the reason.
 The counts must reconcile:
 
 ```
-   clean 1259  +  quarantined 1  =  landed 1260      reconciles = true
+   clean 1545  +  quarantined 1  =  landed 1546      reconciles = true
 ```
 
 CI fails the build when this equation breaks.
@@ -229,7 +243,7 @@ Two sources supply frame times, and the difference matters.
 | Source | Rows | Shape | Use |
 |---|---|---|---|
 | `alarm.trace.spans` | 24 | Typed already | Read directly |
-| Trace summary in a beat | 3978 | Text | Percentiles |
+| Trace summary in a beat | 5688 | Text | Percentiles |
 
 The fixture set holds four alarms. Four samples cannot support a p95.
 
@@ -243,7 +257,7 @@ sim        0.05ms   max 0.70     0 fill    0 img   0.00Mpx
 The pipeline parses these lines.
 
 ```
-   663 summaries  x  6 sections  =  3978 measurements
+   948 summaries  x  6 sections  =  5688 measurements
 ```
 
 The percentile views print the sample count beside each number.
@@ -268,7 +282,7 @@ ids run without gaps inside one page load, so a missing id proves a loss.
 
 | Measure | Value |
 |---|---|
-| Events received | 2079 |
+| Events received | 3152 |
 | Events lost | **0** |
 | Peak events in one beat | 32 |
 | Cap | 400 |
@@ -371,7 +385,8 @@ A silent fallback would mislead an audience, so the fallback announces itself.
 | A | 282 | 269 | 6 | 5 | 1 | 1 |
 | B | 640 | 626 | 6 | 4 | 3 | 1 |
 | C | 338 | 331 | 4 | 3 | 0 | 0 |
-| **Total** | **1260** | **1226** | **16** | **12** | **4** | **2** |
+| D | 286 | 285 | 1 | 0 | 0 | 0 |
+| **Total** | **1546** | **1511** | **17** | **12** | **4** | **2** |
 
 Alarm classes: 2 `loop-dead`, 1 `logic-freeze`, 1 `no-frames`.
 
