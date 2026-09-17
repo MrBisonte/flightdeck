@@ -101,8 +101,8 @@ display(Plot.plot({
 }));
 ```
 
-The pale bar is wall time. The solid bar is time with the clock running. The
-gap between them is menus, pauses and cutscenes.
+The pale bar is wall time and the solid bar is time with the clock running.
+Everything between them is menus, pauses and cutscenes.
 
 ```js
 display(Inputs.table(runs, {rows: 12}));
