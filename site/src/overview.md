@@ -59,8 +59,8 @@ display(html`<div class="card">
 </div>`);
 ```
 
-The pipeline computes that boolean. The page reads it. The same check runs in
-CI on every commit, so a broken contract fails the build.
+The pipeline computes that boolean and the page only reads it. The same check
+runs in CI on every commit, so a broken contract fails the build.
 
 ## 2. How fresh is this?
 
@@ -93,8 +93,8 @@ the method, not as a large study.</p>`);
 
 ## 3. Did anything get lost?
 
-Every event carries an id. The ids in one page load run in sequence. A gap in
-that sequence means an event never arrived.
+Every event carries an id, and the ids in one page load run in sequence. A gap
+there means an event never arrived.
 
 ```sql echo id=loss
 SELECT events_received::INTEGER         AS received,

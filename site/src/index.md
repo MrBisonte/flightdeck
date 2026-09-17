@@ -61,10 +61,9 @@ queries are hidden in this view. Switch to Engineering, top right, to read them.
 
 ## How the data gets here
 
-A thick line means a network protocol carries the data. A solid line means the
-data crosses a process boundary through a file. A dotted line means it never
-leaves the process. Each label names the transport, then the format and the
-side that starts the exchange.
+Thick lines mean a network protocol while solid lines are two processes on one
+machine passing a file between them. Dotted lines never leave the process.
+Labels read `[transport]` then `[format]` then `[who starts]`.
 
 The game writes the log.
 
@@ -97,8 +96,11 @@ No capture from there has reached this pipeline yet.
 
 | Page | What it answers |
 |---|---|
-| [Overview](./overview) | Is the data sound, and how fresh is it |
-| [Four clocks](./four-clocks) | Which clock to trust, and what the quiet gaps mean |
+| [Overview](./overview) | Is the data sound and how fresh is it |
+| [Four clocks](./four-clocks) | Which clock to trust and what the quiet gaps mean |
+| [The game](./game) | What actually happened in the play sessions |
+| [Governance](./governance) | Who decided what a value means and what the data never exercised |
+| [Explore](./explore) | Your own SQL over the same Parquet in your own browser |
 
 ## What this is not
 
