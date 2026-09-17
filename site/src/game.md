@@ -101,8 +101,8 @@ display(Plot.plot({
 }));
 ```
 
-The pale bar is wall time. The solid bar is time with the clock running. The
-gap between them is menus, pauses and cutscenes.
+The pale bar is wall time and the solid bar is time with the clock running.
+Everything between them is menus, pauses and cutscenes.
 
 ```js
 display(Inputs.table(runs, {rows: 12}));
@@ -197,8 +197,8 @@ declines to guess one.
 
 ## What this page cannot tell you
 
-The sample is eight runs from four sessions of real play. Read the shapes, not
-the averages.
+The sample is small, and the cards above count it. Read the shapes, not the
+averages.
 
 Two limits come from the wire format rather than the sample size. There is no
 boss defeat event, so `progressed` is the strongest word available. There is no
