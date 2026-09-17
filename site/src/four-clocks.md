@@ -32,27 +32,32 @@ this view. Switch to Engineering, top right, to read them.
 
 ## 1. Do the clocks agree?
 
-`srv` minus `wall`, over every clean record.
+`srv` minus `wall`, over every clean record, split by the origin that served
+the page.
 
 ```sql echo id=skew
-SELECT records::INTEGER      AS records,
+SELECT origin_kind           AS origin,
+       records::INTEGER      AS records,
        skew_min_ms::INTEGER  AS min_ms,
        skew_mean_ms          AS mean_ms,
        skew_max_ms::INTEGER  AS max_ms
 FROM clock_skew
+ORDER BY origin
 ```
 
 ```js
-const s = skew.get(0);
-display(html`<div class="grid grid-cols-4">
-  <div class="card"><h2>Records measured</h2><span class="big">${s.records}</span></div>
-  <div class="card"><h2>Smallest skew</h2><span class="big">${s.min_ms} ms</span></div>
-  <div class="card"><h2>Mean skew</h2><span class="big">${s.mean_ms} ms</span></div>
-  <div class="card"><h2>Largest skew</h2><span class="big">${s.max_ms} ms</span></div>
-</div>`);
+const rows = skew.toArray?.() ?? Array.from(skew);
+display(html`<div class="grid grid-cols-2">${rows.map((r) => html`<div class="card">
+  <h2>${r.origin}</h2>
+  <span class="big">${r.min_ms} to ${r.max_ms} ms</span>
+  <p>Mean ${r.mean_ms} ms over ${r.records} records.</p>
+</div>`)}</div>`);
 ```
 
-The page clock and the server clock agree to within ${skew.get(0).max_ms} ms. The pipeline measures that rather than assuming it.
+A browser on the same machine as the recorder has almost nothing to disagree
+about. A browser reaching a server over the internet carries the trip in its
+skew. Reporting one number over both would describe neither, so the pipeline
+splits them and the page prints what it is given.
 
 ## 2. Gaps between arrivals
 

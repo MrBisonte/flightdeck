@@ -88,13 +88,30 @@ ORDER BY n DESC;
 -- the server when the record arrives. Comparing them is the only way to tell a
 -- page that went quiet from a page that lied about the time.
 --------------------------------------------------------------------------------
+-- One row per origin class, not one row over everything.
+--
+-- The single row was a pre-aggregation baked into the leaf, and it described
+-- nothing: localhost runs 0 to 9 ms and the published build runs 473 to 571,
+-- so a combined mean sits in a range neither origin ever occupied. The split
+-- is the finding, so the view carries it and a caller that wants the old
+-- number can still sum the parts.
+--
+-- clean carries no origin: sessions does, because the origin arrives on the
+-- hello. The join is LEFT so the row counts still add up to the record count
+-- whatever happens upstream, and an unmatched record says so by name rather
+-- than disappearing.
 CREATE OR REPLACE VIEW clock_skew AS
-SELECT count(*)                       AS records,
-       min(srv - wall)                AS skew_min_ms,
-       round(avg(srv - wall), 2)      AS skew_mean_ms,
-       max(srv - wall)                AS skew_max_ms,
-       round(stddev_pop(srv - wall), 3) AS skew_stddev_ms
-FROM clean WHERE wall IS NOT NULL;
+SELECT coalesce(s.origin_kind, 'unlisted')  AS origin_kind,
+       count(*)                             AS records,
+       min(c.srv - c.wall)                  AS skew_min_ms,
+       round(avg(c.srv - c.wall), 2)        AS skew_mean_ms,
+       max(c.srv - c.wall)                  AS skew_max_ms,
+       round(stddev_pop(c.srv - c.wall), 3) AS skew_stddev_ms
+FROM clean c
+LEFT JOIN sessions s USING (session_id, page_load_seq)
+WHERE c.wall IS NOT NULL
+GROUP BY ALL
+ORDER BY origin_kind;
 
 -- Consecutive arrivals, on the clock the page cannot influence.
 CREATE OR REPLACE VIEW srv_gaps AS
@@ -239,3 +256,33 @@ SELECT session_id,
            AS s_since_previous
 FROM incidents
 ORDER BY session_id, srv;
+
+--------------------------------------------------------------------------------
+-- Warehouse manifest, so a reader can tell fresh data from a fresh build.
+--
+-- A site can always report when it was built. Without this, it cannot report
+-- when the data last arrived, and a stale warehouse behind a new build looks
+-- current. srv is the server receive time, the only clock the page cannot write.
+--
+-- sessions counts page loads, not files, which is the grain session_summary
+-- uses. Two grains on one site would print two different session counts.
+--
+-- The five counts below exist so no page has to add up a column to show a
+-- total. A page may select, cast, order and format; it may not aggregate a
+-- business number, because then the site holds a query the pipeline also holds
+-- and the two can drift. This view lives here rather than beside the contract
+-- views because it now counts curated relations, which are defined above it.
+--
+-- Cast, because a sum over BIGINT is HUGEINT in DuckDB and HUGEINT lands as
+-- DOUBLE in Parquet, which prints a count with a decimal point.
+--------------------------------------------------------------------------------
+CREATE OR REPLACE VIEW warehouse_manifest AS
+SELECT (SELECT count(*) FROM clean)                                           AS records,
+       (SELECT count(DISTINCT session_id || '#' || page_load_seq) FROM clean) AS sessions,
+       (SELECT min(srv) FROM clean)                                           AS first_srv,
+       (SELECT max(srv) FROM clean)                                           AS last_srv,
+       (SELECT coalesce(sum(n), 0) FROM alarms_by_class)::INTEGER             AS alarms,
+       (SELECT count(*) FROM error_report)::INTEGER                           AS errors,
+       (SELECT count(*) FROM srv_gaps)::INTEGER                               AS gaps,
+       (SELECT count(*) FROM frame_time_by_span)::INTEGER                     AS frame_spans,
+       (SELECT coalesce(sum(samples), 0) FROM frame_time_by_span)::INTEGER    AS frame_samples;
