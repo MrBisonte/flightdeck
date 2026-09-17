@@ -56,7 +56,7 @@ BROWSER_FAMILIES = (
 # first slash and are preserved, because they are the evidence.
 ORIGIN = re.compile(r"https?://[^/\s\"')]+")
 
-#: The one origin the hard scrub can produce, so the one a fixture may carry.
+#: The one origin the hard scrub can produce.
 LOCALHOST = "http://localhost"
 FIXTURE_ORIGINS = frozenset({LOCALHOST})
 
@@ -113,6 +113,24 @@ def listed_origins() -> frozenset[str]:
         return frozenset(row["origin"] for row in csv.DictReader(fh))
 
 
+@functools.lru_cache(maxsize=1)
+def publishable_origins() -> frozenset[str]:
+    """The listed origins whose `may_publish` is true. What a fixture may carry.
+
+    One column, two boundaries. `25_publish.sql` already nulls `sessions.origin`
+    unless the reference says the origin may publish. This applies the same
+    decision one step earlier, to the JSONL a public repository holds, because a
+    file nobody may publish the origin of is a file that should not carry it.
+
+    It keeps DEF-15 intact. A dev server port is listed, so the pipeline can
+    still join on it, but `may_publish` is false, so a stale capture carrying it
+    fails the gate exactly as it did when the rule read "localhost only".
+    """
+    with REFERENCE.open(encoding="utf-8", newline="") as fh:
+        return frozenset(row["origin"] for row in csv.DictReader(fh)
+                         if row["may_publish"].strip().lower() == "true")
+
+
 def scrub_origins(text: str) -> str:
     """Rewrite every origin to localhost. The rule for a committed fixture."""
     return ORIGIN.sub(LOCALHOST, text)
@@ -150,14 +168,18 @@ def sanitize_record(rec: dict, rewrite=scrub_origins) -> dict:
     return rec
 
 
-def check_clean(path: pathlib.Path, allowed=FIXTURE_ORIGINS) -> list[str]:
+def check_clean(path: pathlib.Path, allowed=None) -> list[str]:
     """Return a list of violations found in a file. Empty means clean.
 
-    ``allowed`` is the set of origins this file may carry. A committed fixture
-    may carry only the scrub output; a live capture may carry anything the
-    reference lists. Every other origin is a violation, which is default-deny
-    stated as a gate.
+    ``allowed`` is the set of origins this file may carry. The default is the
+    reference rows whose ``may_publish`` is true, so a committed fixture may
+    carry the scrub output and any origin the project has decided to publish,
+    and nothing else. Pass ``listed_origins()`` to check a capture that is not
+    being committed, where a withheld origin is still legitimate data. Every
+    other origin is a violation, which is default-deny stated as a gate.
     """
+    if allowed is None:
+        allowed = publishable_origins()
     problems: list[str] = []
     for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip():
