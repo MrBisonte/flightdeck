@@ -553,24 +553,24 @@ html[data-view="dashboard"] .switch button[aria-pressed="true"] { color: var(--i
 
 /* ---- Page width ---------------------------------------------------------
  *
- * The container is wide because tables and charts need the room. Prose is not:
- * it is capped in characters, so a paragraph stays readable inside a container
- * built for a twelve column table.
+ * One width, for prose and panels alike.
  *
- * Framework's default theme capped prose at 640px while code blocks ran to
- * 960px, so every paragraph stopped short of the SQL under it. One width for
- * the container and one measure for the text replaces both numbers.
+ * Framework's default capped prose at 640px while code ran to 960px, so every
+ * paragraph stopped short of the SQL under it. A measure in characters brings
+ * the same ragged edge back by another route: a 62ch paragraph above a
+ * full-width table reads as a mistake, whatever the typographic argument for
+ * it. The design file gets away with the narrow measure because its paragraphs
+ * sit in the left column of a two column section head, so the right side is
+ * occupied. Nothing here has that grid yet.
+ *
+ * 1080px rather than the design's 1180: a paragraph has to be readable at the
+ * full width, and the charts are drawn on a 1000px viewBox, so they still
+ * render close to 1:1. Paragraphs on this site run two or three short
+ * sentences, which is what makes one wide column tolerable.
  */
 :root {
-  --page-width: 1180px;
+  --page-width: 1080px;
   --page-gutter: clamp(16px, 4vw, 40px);
-}
-
-/* Framework gives the centre column a flat 32px margin, which is a second
- * gutter stacked on the one below and leaves the header and the prose starting
- * at different places. One gutter, on one element. */
-#observablehq-center {
-  margin: 0;
 }
 
 #observablehq-main {
@@ -586,14 +586,13 @@ html[data-view="dashboard"] .switch button[aria-pressed="true"] { color: var(--i
 #observablehq-main h4,
 #observablehq-main h5,
 #observablehq-main h6,
-#observablehq-main table,
-#observablehq-main figure,
-#observablehq-main figcaption { max-width: none; }
-
 #observablehq-main p,
 #observablehq-main blockquote,
 #observablehq-main ol,
-#observablehq-main ul { max-width: 62ch; }
+#observablehq-main ul,
+#observablehq-main table,
+#observablehq-main figure,
+#observablehq-main figcaption { max-width: none; }
 
 /* Inputs.table renders with table-layout: fixed and a width equal to its box,
  * so on a 375px screen an eight column table gives every column 32px and clips
