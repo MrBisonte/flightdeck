@@ -122,6 +122,75 @@
 
     document.body.insertBefore(header, document.body.firstChild);
     sync();
+    wrapTables();
+    foldQueries();
+    watchMain();
+  }
+
+  // ---- Wrappers Framework does not write ---------------------------------
+  //
+  // Two shapes the artifact needs that markdown cannot emit: a scrolling box
+  // around a table, and a fold around an echoed query. Both are pure
+  // presentation, so neither belongs in a page. Nothing here reads or changes a
+  // value.
+
+  function wrapTables() {
+    document.querySelectorAll("#observablehq-main table").forEach(function (table) {
+      // Inputs.table already sits in a scrolling form of its own.
+      if (table.closest(".tbl") || table.closest("form")) return;
+      var box = document.createElement("div");
+      box.className = "tbl";
+      table.parentNode.insertBefore(box, table);
+      box.appendChild(table);
+    });
+  }
+
+  // The relation the query reads, for the summary line. A reader scanning for
+  // where a number came from wants the table name, not the word SQL nine times.
+  function relationOf(sql) {
+    var match = /\bFROM\s+([A-Za-z_][A-Za-z0-9_]*)/i.exec(sql);
+    return match ? match[1] : null;
+  }
+
+  function foldQueries() {
+    document.querySelectorAll("#observablehq-main .observablehq-pre-container")
+      .forEach(function (container) {
+        if (container.closest("details.sql")) return;
+        var details = document.createElement("details");
+        details.className = "sql";
+        details.open = true;
+
+        var summary = document.createElement("summary");
+        var relation = relationOf(container.textContent || "");
+        summary.appendChild(document.createTextNode("SQL"));
+        if (relation) {
+          summary.appendChild(document.createTextNode(" · "));
+          var name = document.createElement("b");
+          name.textContent = relation;
+          summary.appendChild(name);
+        }
+
+        details.appendChild(summary);
+        container.parentNode.insertBefore(details, container);
+        details.appendChild(container);
+      });
+  }
+
+  // Cells render after the page loads, so the wrappers run again whenever main
+  // gains children. Both functions skip what they have already wrapped.
+  function watchMain() {
+    var main = document.getElementById("observablehq-main");
+    if (!main || !window.MutationObserver) return;
+    var pending = false;
+    new MutationObserver(function () {
+      if (pending) return;
+      pending = true;
+      requestAnimationFrame(function () {
+        pending = false;
+        wrapTables();
+        foldQueries();
+      });
+    }).observe(main, {childList: true, subtree: true});
   }
 
   function sync() {
