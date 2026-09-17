@@ -197,8 +197,8 @@ declines to guess one.
 
 ## What this page cannot tell you
 
-The sample is eight runs from four sessions of real play. Read the shapes, not
-the averages.
+The sample is small, and the cards above count it. Read the shapes, not the
+averages.
 
 Two limits come from the wire format rather than the sample size. There is no
 boss defeat event, so `progressed` is the strongest word available. There is no

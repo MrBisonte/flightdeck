@@ -28,8 +28,8 @@ Switch to Engineering, top right, to read the SQL above each result.
 
 ## 1. What is under version control
 
-Three of the four gold dimensions keep their history. A version opens when this
-pipeline first sees a value and closes when the value moves.
+The gold dimensions that keep their history are named below. A version opens
+when this pipeline first sees a value and closes when the value moves.
 
 ```sql echo id=totals
 SELECT members,
@@ -68,8 +68,8 @@ playbook between two runs to prove that it does.
 
 ## 2. One policy per dimension
 
-`contract cap` carries an older first version than the other two. It was the
-first dimension here to keep a history, and the timestamps say so.
+`contract cap` carries the oldest first version in that table. It was the first
+dimension here to keep a history, and the timestamps say so.
 
 ```sql echo id=policy
 SELECT dimension,
@@ -93,8 +93,9 @@ the change and fix nothing. ADR 0002 carries both arguments.
 
 ## 3. What the playbook says today
 
-Nine members, each at version 1, each with the moment this pipeline first read
-it. A rewritten description closes the row you see here and opens the next one.
+The cards above count the members and their versions. The table below gives
+each one the moment this pipeline first read it. A rewritten description closes
+the row you see here and opens the next one.
 
 ```sql echo id=history
 SELECT dimension,
@@ -148,9 +149,9 @@ ORDER BY dimension
 display(Inputs.table(coverage, {rows: 9, width: WIDTHS}));
 ```
 
-A third of the mode dimension and a third of the app states never appear. Three
-fixture sessions from one player produce that, and a wider capture would close
-most of the gap.
+The never seen column names every documented value the data does not show. A
+narrow capture from one player produces that, and a wider one would close most
+of the gap.
 
 ## What this page cannot tell you
 
