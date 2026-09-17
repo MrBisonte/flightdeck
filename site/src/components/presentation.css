@@ -215,46 +215,173 @@ html[data-view="dashboard"] #observablehq-main figure {
 html[data-view="dashboard"] .only-engineering { display: none; }
 html[data-view="engineering"] .only-dashboard { display: none; }
 
-/* ---- The switch --------------------------------------------------------- */
-#view-switch {
-  position: fixed;
-  top: 14px;
-  right: 18px;
-  z-index: 400;
-  display: inline-flex;
-  gap: 3px;
-  padding: 3px;
-  border-radius: 10px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  font-family: var(--mono);
-  font-size: 12.5px;
-  box-shadow: var(--shadow);
+/* ---- The header --------------------------------------------------------
+ *
+ * Framework's sidebar is off, so this carries the navigation instead. Built in
+ * presentation.js from the config's own page list, and sticky, because the site
+ * is six pages a reader moves between rather than one long document.
+ */
+#site-header {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 50;
+  background: color-mix(in srgb, var(--ground) 88%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line-soft);
 }
 
-#view-switch button {
+#site-header .wrap {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-height: 56px;
+  box-sizing: border-box;
+  max-width: var(--page-width);
+  margin: 0 auto;
+  padding-inline: var(--page-gutter);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+/* The lamp. Square rather than round, because every other corner on the page
+ * is square, and it is the one place the accent appears at rest. */
+.brand i {
+  width: 10px;
+  height: 10px;
+  background: var(--amber);
+  border-radius: 2px;
+  box-shadow: 0 0 0 3px var(--amber-soft);
+}
+
+.brand small {
+  color: var(--faint);
+  font-weight: 400;
+}
+
+nav.sections {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+nav.sections::-webkit-scrollbar { display: none; }
+
+nav.sections a {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 8px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+}
+
+nav.sections a:hover { color: var(--ink); }
+
+nav.sections a[aria-current="page"] {
+  color: var(--amber-ink);
+  border-bottom-color: var(--amber);
+}
+
+/* ---- The switch --------------------------------------------------------- */
+.switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.switch button {
   appearance: none;
   border: 0;
-  cursor: pointer;
-  padding: 7px 14px;
-  border-radius: 7px;
   background: transparent;
   color: var(--muted);
-  font: inherit;
+  font: 500 12.5px var(--mono);
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
   line-height: 1;
 }
 
-#view-switch button[aria-pressed="true"] {
-  background: var(--amber-soft);
-  color: var(--amber-ink);
-  font-weight: 600;
-  box-shadow: none;
+/* The pressed half is the one place a solid accent fill appears, so the ink on
+ * it is named rather than inherited. Dark in both views: dashboard --amber is
+ * already darkened for text, and white on it reads 3.25:1, under the 4.5:1 AA
+ * floor for 12.5px. tests/test_theme_contrast.py holds both pairs. */
+.switch button[aria-pressed="true"] { background: var(--amber); color: var(--ground); }
+html[data-view="dashboard"] .switch button[aria-pressed="true"] { color: var(--ink); }
+
+/* Under 760px the nav drops to its own row and scrolls sideways, rather than
+ * the wordmark and the switch being squeezed to nothing. */
+@media (max-width: 760px) {
+  #site-header .wrap { flex-wrap: wrap; row-gap: 0; padding-block: 6px 0; }
+  .brand { order: 1; }
+  .brand small { display: none; }
+  .switch { order: 2; margin-left: auto; }
+  nav.sections { order: 3; flex-basis: 100%; margin: 4px -4px 0; padding: 0 4px 6px; }
 }
 
-@media (max-width: 640px) {
-  #view-switch { top: 8px; right: 8px; font-size: 12px; }
-  #view-switch button { padding: 6px 10px; }
+/* ---- Page width ---------------------------------------------------------
+ *
+ * The container is wide because tables and charts need the room. Prose is not:
+ * it is capped in characters, so a paragraph stays readable inside a container
+ * built for a twelve column table.
+ *
+ * Framework's default theme capped prose at 640px while code blocks ran to
+ * 960px, so every paragraph stopped short of the SQL under it. One width for
+ * the container and one measure for the text replaces both numbers.
+ */
+:root {
+  --page-width: 1180px;
+  --page-gutter: clamp(16px, 4vw, 40px);
 }
+
+/* Framework gives the centre column a flat 32px margin, which is a second
+ * gutter stacked on the one below and leaves the header and the prose starting
+ * at different places. One gutter, on one element. */
+#observablehq-center {
+  margin: 0;
+}
+
+#observablehq-main {
+  box-sizing: border-box;
+  max-width: var(--page-width);
+  margin-inline: auto;
+  padding-inline: var(--page-gutter);
+}
+
+#observablehq-main h1,
+#observablehq-main h2,
+#observablehq-main h3,
+#observablehq-main h4,
+#observablehq-main h5,
+#observablehq-main h6,
+#observablehq-main table,
+#observablehq-main figure,
+#observablehq-main figcaption { max-width: none; }
+
+#observablehq-main p,
+#observablehq-main blockquote,
+#observablehq-main ol,
+#observablehq-main ul { max-width: 62ch; }
 
 /* Inputs.table renders with table-layout: fixed and a width equal to its box,
  * so on a 375px screen an eight column table gives every column 32px and clips
