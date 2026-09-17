@@ -17,7 +17,7 @@ Each claim on this page maps to one of three things:
 | Governance, data contracts | "typed data contracts, governance as code, data quality and lineage" | flightdeck | `contracts/flight_log.yml`, the `contract_caps` table, `quarantine` | `./demo.sh typed` | The reconciliation table |
 | Documentation levels | "architecture documentation at conceptual, logical and physical levels" | crow-archer, flightdeck | `monitored-playtest.md`, `docs/architecture.md` | Open either page | Printed copy |
 | Data engineering, ELT | "metadata driven ETL and ELT engines, data pipelines" | quacknettor | `configs/pipelines.yml`, config driven adapters | Open the config | The README |
-| Performance engineering | "performance engineering at query, parameter and OS level" | flightdeck | `frame_time_by_span`, over 3978 measurements | `./demo.sh curated` | The terminal cast |
+| Performance engineering | "performance engineering at query, parameter and OS level" | flightdeck | `frame_time_by_span`, over 5688 measurements | `./demo.sh curated` | The terminal cast |
 | Snowflake | "Snowflake (SnowPro Core certified)" | quacknettor | The Snowflake adapter. `COPY INTO` reads the same Parquet | Documented only | The documented path |
 | Typed layer for consumers | "typed data layers for downstream AI consumption" | flightdeck | `session_context`, one typed row per page load | `./demo.sh export` | The printed payload |
 | Conformed dimensions | "data quality", "metadata driven ETL" | flightdeck | `fixtures/reference/` joined to the telemetry | `./demo.sh curated` | The coverage table |
@@ -30,15 +30,16 @@ Each claim on this page maps to one of three things:
 
 | Measure | Value | Source |
 |---|---|---|
-| Records processed | 1260 | `contract_reconciliation` |
-| Reconciliation | 1259 clean + 1 quarantined = 1260 | `contract_reconciliation` |
-| Page loads across 3 files | 16 | `sessions` |
-| Clock agreement | 0 to 9 ms, mean 0.92 | `clock_skew` |
+| Records processed | 1546 | `contract_reconciliation` |
+| Reconciliation | 1545 clean + 1 quarantined = 1546 | `contract_reconciliation` |
+| Page loads across 4 files | 17 | `sessions` |
+| Clock agreement, localhost | 0 to 9 ms, mean 0.91 | `clock_skew`, `sessions` |
+| Clock agreement, published build | 473 to 571 ms, mean 478.07 | `clock_skew`, `sessions` |
 | Gaps that throttling explains | 20 of 25 | `gap_explained` |
 | Gaps that throttling does not explain | 1, at 472.2s | `gap_explained` |
 | Crash to alarm, time to detection | 1.323 s | `incident_timeline` |
-| Frame time samples | 3978 | `frame_time_by_span` |
-| Telemetry lost | 0 of 2079 events | `loss_accounting` |
+| Frame time samples | 5688 | `frame_time_by_span` |
+| Telemetry lost | 0 of 3152 events | `loss_accounting` |
 | Ring headroom used | 32 of 400, so 8% | `loss_accounting` |
 | Dimension coverage | state 10/15, mode 1/3, char 4/5 | `dimension_coverage` |
 | Full run, cold | 3 to 5 seconds | `./demo.sh` |
@@ -121,7 +122,7 @@ holds the genuinely multi source work. Nobody can show that work.
 | Source | Rows | Shape |
 |---|---|---|
 | `alarm.trace.spans` | 24 | typed |
-| Trace summary in a beat | 3978 | text |
+| Trace summary in a beat | 5688 | text |
 
 Four samples cannot support a p95. The pipeline parses the text instead. A parse
 differs from a measurement, so every percentile view prints its sample count.

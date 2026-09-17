@@ -64,7 +64,7 @@ each one uses, so the arrows here carry no notation.
 > **Warning.** Step 4 is the subtle one. A session file is not a page load. The
 > sink writes one file per dev server run. One file holds every page load of that
 > run. Event ids restart at 1 on each page load, so the file name keys nothing on
-> its own. The fixtures hold 16 page loads across 3 files.
+> its own. The fixtures hold 17 page loads across 4 files.
 
 ### 2.1 Runtime topology
 
@@ -121,26 +121,26 @@ makes this practical, and the point where it stops being practical.
 
 ## 3. Object Inventory
 
-Row counts come from the three fixture sessions. Observed ranges come from the
+Row counts come from the four fixture sessions. Observed ranges come from the
 same data, so a wider range is possible in production.
 
 ### 3.1 Relations
 
 | Relation | Kind | Rows | Grain |
 |---|---|---|---|
-| `raw_landed` | view | 1260 | one record |
-| `raw` | view | 1260 | one record |
-| `landed` | view | 1260 | one record |
+| `raw_landed` | view | 1546 | one record |
+| `raw` | view | 1546 | one record |
+| `landed` | view | 1546 | one record |
 | `quarantine` | table | 1 | one rejected record |
-| `clean` | view | 1259 | one accepted record |
-| `sessions` | table | 16 | one page load |
-| `beats` | table | 1226 | one heartbeat |
-| `pulses` | table | 1230 | one game-state snapshot |
-| `events` | table | 2079 | one log entry |
+| `clean` | view | 1545 | one accepted record |
+| `sessions` | table | 17 | one page load |
+| `beats` | table | 1511 | one heartbeat |
+| `pulses` | table | 1515 | one game-state snapshot |
+| `events` | table | 3152 | one log entry |
 | `alarms` | table | 4 | one watchdog trip |
 | `blockers` | table | 4 | one input snapshot at an alarm |
 | `errors` | table | 2 | one uncaught exception |
-| `spans` | table | 4002 | one frame section in one trace summary |
+| `spans` | table | 5712 | one frame section in one trace summary |
 | `ref_states` | view | 15 | one documented app state |
 | `ref_modes` | view | 3 | one documented mode |
 | `ref_chars` | view | 5 | one documented character |
@@ -393,13 +393,13 @@ erDiagram
 
 | Pair | Cardinality | Reason |
 |---|---|---|
-| `sessions` to `beats` | 1 to many | 16 page loads carry 1226 beats |
-| `sessions` to `pulses` | 1 to many | Both `beat` and `alarm` carry a pulse. 1226 plus 4 equals 1230 |
+| `sessions` to `beats` | 1 to many | 17 page loads carry 1511 beats |
+| `sessions` to `pulses` | 1 to many | Both `beat` and `alarm` carry a pulse. 1511 plus 4 equals 1515 |
 | `alarms` to `blockers` | 1 to 1 | Every alarm carries exactly one blocker snapshot |
 | `alarms` to `spans` | 1 to 6 | One trace, six frame sections. 4 alarms yield 24 rows |
 | `beats` to `spans` | 1 to 0, 6 or 12 | A beat yields spans only when the tracer drained a summary |
-| `landed` to `clean` | 1 to 0 or 1 | 1259 of 1260 records pass |
-| `landed` to `quarantine` | 1 to 0 or 1 | 1 of 1260 records fails |
+| `landed` to `clean` | 1 to 0 or 1 | 1545 of 1546 records pass |
+| `landed` to `quarantine` | 1 to 0 or 1 | 1 of 1546 records fails |
 
 ### 4.2 Key verification
 
@@ -407,15 +407,15 @@ Each candidate key below ran a `count(*)` against a `count(DISTINCT ...)`.
 
 | Relation | Candidate key | Rows | Distinct | Holds |
 |---|---|---|---|---|
-| `clean` | `session_id`, `srv`, `kind` | 1259 | 1259 | yes |
-| `sessions` | `session_id`, `page_load_seq` | 16 | 16 | yes |
-| `beats` | `session_id`, `page_load_seq`, `srv` | 1226 | 1226 | yes |
-| `pulses` | `session_id`, `page_load_seq`, `srv` | 1230 | 1230 | yes |
-| `events` | `session_id`, `page_load_seq`, `id` | 2079 | 2079 | yes |
+| `clean` | `session_id`, `srv`, `kind` | 1545 | 1545 | yes |
+| `sessions` | `session_id`, `page_load_seq` | 17 | 17 | yes |
+| `beats` | `session_id`, `page_load_seq`, `srv` | 1511 | 1511 | yes |
+| `pulses` | `session_id`, `page_load_seq`, `srv` | 1515 | 1515 | yes |
+| `events` | `session_id`, `page_load_seq`, `id` | 3152 | 3152 | yes |
 | `alarms` | `session_id`, `page_load_seq`, `srv` | 4 | 4 | yes |
 | `blockers` | `session_id`, `page_load_seq`, `srv` | 4 | 4 | yes |
 | `errors` | `session_id`, `page_load_seq`, `srv` | 2 | 2 | yes |
-| `spans` | `session_id`, `page_load_seq`, `srv`, `span`, `origin` | 4002 | 3984 | **no** |
+| `spans` | `session_id`, `page_load_seq`, `srv`, `span`, `origin` | 5712 | 5694 | **no** |
 
 > **Warning.** `spans` has no primary key. One beat can drain two trace
 > summaries. Three beats did, so 18 rows collide. At `srv = 1788102057802` the
@@ -453,7 +453,7 @@ version starts after every fact in this warehouse, so such a join would resolve
 nothing. Facts join the current version instead, which is what `dim_character`
 already hands them.
 
-**Verified.** The three fixture sessions produce nine versioned members, each at
+**Verified.** The four fixture sessions produce nine versioned members, each at
 version 1. `tests/test_versioned_dimensions.py` edits the playbook between two
 gold runs. It pins four cases: a changed description, a withdrawn member, a new
 member, and an untouched member that must stay at one row.
@@ -503,7 +503,7 @@ suffix exists because this recorder build sends no `cid`.
 | `pulses` | One row. `state` menu, `char` archer, `hp` 9, `kills` 0 |
 | `events` | Two rows. Ids 1 and 2, both `drained_by` beat |
 | `spans` | No rows. This beat carried no trace summary |
-| `loss_accounting` | 2079 events received, 0 lost, peak 32 against the 400 cap, 8 percent |
+| `loss_accounting` | 3152 events received, 0 lost, peak 32 against the 400 cap, 8 percent |
 
 One wire record becomes four relational rows. That fan-out is the reason the
 entity tables exist. `clean` alone would force every consumer to unnest.
@@ -570,7 +570,7 @@ That is the transit time from the page to the sink.
 | `landed` | `page_load_seq` becomes 0. No `hello` preceded this record in its file |
 | `quarantine` | One row. `reason` `orphan_record_no_hello` |
 | `clean` | Absent. `clean` excludes every quarantined record |
-| `contract_reconciliation` | 1259 clean plus 1 quarantined equals 1260 landed |
+| `contract_reconciliation` | 1545 clean plus 1 quarantined equals 1546 landed |
 
 The pipeline drops nothing. The record survives with a reason attached, and the counts
 still add up. That is the point of the quarantine relation.

@@ -8,7 +8,7 @@ import pytest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "scripts"))
 
 from sanitize_flightlog import (browser_family, check_clean, listed_origins, mask_origins,
-                                MASK, sanitize_record, scrub_origins)
+                                MASK, publishable_origins, sanitize_record, scrub_origins)
 
 
 @pytest.mark.parametrize(
@@ -89,7 +89,7 @@ def test_committed_fixtures_are_clean():
     """The published fixtures must pass their own gate."""
     raw = pathlib.Path(__file__).resolve().parents[1] / "fixtures" / "raw"
     files = sorted(raw.glob("*.jsonl"))
-    assert len(files) == 3, "expected three fixture sessions"
+    assert len(files) == 4, "expected four fixture sessions"
     for path in files:
         assert check_clean(path) == []
 
@@ -201,8 +201,33 @@ def test_the_live_gate_accepts_a_listed_public_origin(tmp_path):
                               "href": "https://mrbisonte.github.io/crow-archer/"}) + "\n",
                   encoding="utf-8")
     assert check_clean(ok, listed_origins()) == []
-    # The same file fails the fixture gate, which allows the scrub output only.
-    assert any("unlisted origin" in p for p in check_clean(ok))
+    # And so does the committing gate, because the reference says it may publish.
+    assert check_clean(ok) == []
+
+
+# ---------------------------------------------------------------------------
+# may_publish, the one column that decides what a public repository may hold.
+# ---------------------------------------------------------------------------
+def test_the_committing_gate_refuses_a_withheld_origin(tmp_path):
+    """DEF-15, restated. The dev server port is listed, and still refused.
+
+    The rule used to read "localhost only", which kept a stale capture out by
+    keeping everything out. It now reads "the reference says this may publish",
+    which keeps the same capture out for the reason that was always meant.
+    """
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text(json.dumps({"kind": "hello", "ua": "Chrome",
+                               "href": "http://localhost:8090/"}) + "\n",
+                   encoding="utf-8")
+    assert "http://localhost:8090" in listed_origins()
+    assert any("unlisted origin" in p for p in check_clean(bad))
+    # The same file is legitimate data for a capture nobody is committing.
+    assert check_clean(bad, listed_origins()) == []
+
+
+def test_publishable_origins_is_a_strict_subset():
+    assert publishable_origins() < listed_origins()
+    assert MASK in publishable_origins()
 
 
 def test_the_live_gate_still_refuses_an_unlisted_origin(tmp_path):
