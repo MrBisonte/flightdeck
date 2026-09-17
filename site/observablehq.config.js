@@ -26,11 +26,22 @@ export default {
     {name: "Governance", path: "/governance"},
     {name: "Explore", path: "/explore"}
   ],
+  // The sticky header in presentation.css carries the page links instead, so
+  // both views get the same navigation. The pager stays: it is the only thing
+  // that kept the reading order the sidebar used to show.
+  sidebar: false,
+  pager: true,
+  // Both views now own their palette. Engineering overrides every --theme-*
+  // variable, so the base only has to stop painting a light page underneath.
+  theme: "dark",
+  // Framework links Source Serif 4 from fonts.googleapis.com for every theme.
+  // Nothing on this site sets it, and the site should make no third-party
+  // request at view time, so the default list is emptied rather than overridden
+  // in CSS, which would still fetch the face. See the type block in
+  // presentation.css for what carries the page instead.
+  globalStylesheets: [],
   footer: "Every number on this site is the result of a query over warehouse/curated, which ./demo.sh build writes.",
   head: [
-    '<link rel="preconnect" href="https://fonts.googleapis.com">',
-    '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>',
-    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap">',
     // The default theme caps prose at 640px while code blocks run to 960px, so
     // every paragraph stopped short of the SQL under it.
     "<style>",

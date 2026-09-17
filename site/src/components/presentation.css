@@ -1,56 +1,122 @@
 /* Presentation mode.
  *
- * The site ships two views of the same page. Engineering is the default and is
- * the site as it was: every query printed above its result. Dashboard hides the
- * SQL and restyles the page for a reader who wants the answer, not the working.
+ * The site ships two views of the same page. Engineering is the instrument
+ * panel: a dark ground, the query printed above every result. Dashboard is the
+ * flight manual: paper, no SQL, the answer on its own.
  *
  * Nothing here recomputes anything. Both views render the same query results,
  * so the two can never disagree.
  *
- * Everything below is scoped to html[data-view="dashboard"]. The engineering
- * view inherits the stock Observable Framework theme untouched, which is the
- * point: this file can be deleted and the original site is still there.
+ * Both views now own their palette. This file used to scope everything to the
+ * dashboard so that deleting it restored the stock Framework site. That
+ * property is given up deliberately: engineering overrides Framework's own
+ * --theme-* variables too, because a page whose charts and tables paint
+ * themselves from a theme the rest of the page does not use looks like two
+ * designs sharing a screen.
  *
- * To swap the visual direction, replace the token block and the card rules.
- * The structure above them does not change.
+ * One set of token names, two blocks. Every rule below reads the names, so a
+ * palette change touches the two blocks and nothing else.
  */
 
-/* ---- Direction D, soft product ------------------------------------------ */
-html[data-view="dashboard"] {
-  --dash-bg: #f6f5fb;
-  --dash-card: #ffffff;
-  --dash-ink: #1c1a2e;
-  --dash-muted: #6b6880;
-  /* 4.5:1 against --dash-accent-soft, which is the table header background.
-   * #6d5ae0 read 4.35:1 there and missed WCAG AA on every table on the site. */
-  --dash-accent: #5f4ecd;
-  --dash-accent-soft: #f0edfd;
-  --dash-line: #eae8f4;
-  --dash-good: #0f9d7a;
-  color-scheme: light;
-
-  /* Framework's own theme variables, restated in light values.
-   *
-   * A reader whose system prefers dark gets the dark theme, and overriding
-   * body alone left the sidebar and every Plot axis painting themselves with
-   * dark-theme colors on a light card. These cascade to everything the theme
-   * styles, including charts, so there is one place to change rather than a
-   * growing list of selectors. */
-  --theme-foreground: #1c1a2e;
-  --theme-foreground-muted: #6b6880;
-  --theme-foreground-faint: #9490ab;
-  --theme-foreground-fainter: #c9c5da;
-  --theme-foreground-faintest: #eae8f4;
-  --theme-foreground-alt: #1c1a2e;
-  --theme-background: #f6f5fb;
-  --theme-background-alt: #ffffff;
-  --theme-foreground-focus: var(--dash-accent);
+/* ---- Engineering, the instrument panel ---------------------------------- */
+/*
+ * Matched on :not(dashboard) rather than [data-view="engineering"] so the page
+ * is still the engineering view when script never runs and no attribute is
+ * set. The attribute selector also outranks Framework's own :root block, which
+ * is what lets these override the theme rather than race it.
+ */
+html:not([data-view="dashboard"]) {
+  --ground: #0b1018;
+  --panel: #121a26;
+  --raised: #182333;
+  --line: #243042;
+  --line-soft: #1b2535;
+  --ink: #e7edf5;
+  --muted: #9aa8ba;
+  --faint: #5f6e84;
+  --amber: #f2b544;          /* UI accent: eyebrows, active states, the fact clock */
+  --amber-ink: #f2b544;      /* the accent used as text; legible as-is on dark */
+  --amber-soft: rgba(242, 181, 68, 0.12);
+  --mark-local: #c08a1e;     /* chart series: the localhost origin */
+  --mark-public: #3596c4;    /* chart series: the published build */
+  --good: #4fcf8e;
+  --bad: #f26b6b;
+  --good-soft: rgba(79, 207, 142, 0.12);
+  --bad-soft: rgba(242, 107, 107, 0.14);
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 10px 30px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
 }
 
-html[data-view="dashboard"] body {
-  background: var(--dash-bg);
-  color: var(--dash-ink);
-  font-family: "Outfit", ui-sans-serif, system-ui, sans-serif;
+/* ---- Dashboard, the flight manual --------------------------------------- */
+html[data-view="dashboard"] {
+  --ground: #eef1f5;
+  --panel: #ffffff;
+  --raised: #f5f7fa;
+  --line: #d8dee7;
+  --line-soft: #e6eaf0;
+  --ink: #101826;
+  --muted: #55657a;
+  --faint: #8793a5;
+  --amber: #b8860b;
+  /* Darkened from --amber for text. It reads 4.83:1 against --amber-soft over
+   * --panel, which is the table header, so it clears WCAG AA there. The plain
+   * --amber misses that pair, which is why the two are separate tokens. */
+  --amber-ink: #8a6205;
+  --amber-soft: rgba(184, 134, 11, 0.12);
+  --mark-local: #a86b00;
+  --mark-public: #1f7fb5;
+  --good: #1c8a5a;
+  --bad: #c4363b;
+  --good-soft: rgba(28, 138, 90, 0.10);
+  --bad-soft: rgba(196, 54, 59, 0.10);
+  --shadow: 0 1px 2px rgba(16, 24, 38, 0.06), 0 8px 24px rgba(16, 24, 38, 0.06);
+  color-scheme: light;
+}
+
+/* ---- Type ---------------------------------------------------------------
+ *
+ * No web font, and none committed either. The named faces come before the
+ * generic keywords on purpose: with system-ui first, a Linux reader resolves to
+ * the desktop UI font, and Cantarell and Ubuntu are the two faces least like
+ * the rest of this stack. The named faces are platform-exclusive in practice,
+ * so the order does not cross-contaminate. Consolas sits after Menlo because
+ * Microsoft Office installs Consolas on macOS.
+ *
+ * Emphasis in the mono face is 600, never 500. Menlo, Consolas, DejaVu Sans
+ * Mono and Liberation Mono ship only Regular and Bold, and CSS resolves a
+ * missing 500 down to 400, which drops the emphasis silently. A missing 600
+ * resolves up to 700, so every face keeps it.
+ */
+:root {
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
+          "Noto Sans", "DejaVu Sans", "Liberation Sans", Roboto,
+          ui-sans-serif, system-ui, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Menlo, Consolas,
+          "DejaVu Sans Mono", "Liberation Mono", "Noto Sans Mono",
+          "Roboto Mono", "Droid Sans Mono", monospace;
+}
+
+/* ---- Framework's own theme, restated from the tokens ---------------------
+ *
+ * These cascade to everything Framework styles, charts and tables included, so
+ * there is one place to change rather than a growing list of selectors. */
+html:not([data-view="dashboard"]),
+html[data-view="dashboard"] {
+  --theme-foreground: var(--ink);
+  --theme-foreground-muted: var(--muted);
+  --theme-foreground-faint: var(--faint);
+  --theme-foreground-fainter: var(--line);
+  --theme-foreground-faintest: var(--line-soft);
+  --theme-foreground-alt: var(--ink);
+  --theme-background: var(--ground);
+  --theme-background-alt: var(--panel);
+  --theme-foreground-focus: var(--amber-ink);
+}
+
+html body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--sans);
 }
 
 /* The SQL is not deleted, only hidden. One click brings it back. */
@@ -61,26 +127,26 @@ html[data-view="dashboard"] .observablehq-pre-container {
 html[data-view="dashboard"] #observablehq-main h1 {
   font-weight: 600;
   letter-spacing: -0.02em;
-  color: var(--dash-ink);
+  color: var(--ink);
 }
 
 html[data-view="dashboard"] #observablehq-main h2 {
   font-weight: 600;
   letter-spacing: -0.01em;
-  color: var(--dash-ink);
+  color: var(--ink);
   border: none;
   margin-top: 2.4rem;
 }
 
 html[data-view="dashboard"] #observablehq-main p {
-  color: var(--dash-muted);
+  color: var(--muted);
   font-size: 15px;
   line-height: 1.65;
   text-wrap: pretty;
 }
 
 html[data-view="dashboard"] .card {
-  background: var(--dash-card);
+  background: var(--panel);
   border: none;
   border-radius: 15px;
   box-shadow: 0 1px 3px rgba(28, 26, 46, 0.07);
@@ -90,7 +156,7 @@ html[data-view="dashboard"] .card {
 html[data-view="dashboard"] .card h2 {
   font-size: 13px;
   font-weight: 400;
-  color: var(--dash-muted);
+  color: var(--muted);
   margin: 0;
   letter-spacing: 0;
   text-transform: none;
@@ -99,7 +165,7 @@ html[data-view="dashboard"] .card h2 {
 html[data-view="dashboard"] .card .big {
   font-size: 32px;
   font-weight: 600;
-  color: var(--dash-ink);
+  color: var(--ink);
   line-height: 1.1;
   display: block;
   margin-top: 10px;
@@ -107,12 +173,12 @@ html[data-view="dashboard"] .card .big {
 
 html[data-view="dashboard"] .card p {
   font-size: 13px;
-  color: var(--dash-muted);
+  color: var(--muted);
   margin: 8px 0 0 0;
 }
 
 html[data-view="dashboard"] #observablehq-main table {
-  background: var(--dash-card);
+  background: var(--panel);
   border-radius: 15px;
   box-shadow: 0 1px 3px rgba(28, 26, 46, 0.07);
   overflow: hidden;
@@ -121,8 +187,8 @@ html[data-view="dashboard"] #observablehq-main table {
 }
 
 html[data-view="dashboard"] #observablehq-main th {
-  background: var(--dash-accent-soft);
-  color: var(--dash-accent);
+  background: var(--amber-soft);
+  color: var(--amber-ink);
   font-weight: 500;
   border: none;
   padding: 11px 14px;
@@ -130,22 +196,17 @@ html[data-view="dashboard"] #observablehq-main th {
 
 html[data-view="dashboard"] #observablehq-main td {
   border: none;
-  border-top: 1px solid var(--dash-line);
+  border-top: 1px solid var(--line);
   padding: 10px 14px;
-  color: var(--dash-ink);
+  color: var(--ink);
 }
 
 html[data-view="dashboard"] #observablehq-main figure {
-  background: var(--dash-card);
+  background: var(--panel);
   border-radius: 15px;
   box-shadow: 0 1px 3px rgba(28, 26, 46, 0.07);
   padding: 20px 22px;
   margin: 1.4rem 0;
-}
-
-html[data-view="dashboard"] #observablehq-sidebar {
-  background: var(--dash-card);
-  border-right: 1px solid var(--dash-line);
 }
 
 /* ---- Sentences that are only true in one view --------------------------- */
@@ -164,11 +225,11 @@ html[data-view="engineering"] .only-dashboard { display: none; }
   gap: 3px;
   padding: 3px;
   border-radius: 10px;
-  background: var(--theme-background-alt, #f0eef7);
-  border: 1px solid var(--theme-foreground-faintest, #eae8f4);
-  font-family: "Outfit", ui-sans-serif, system-ui, sans-serif;
-  font-size: 13px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  box-shadow: var(--shadow);
 }
 
 #view-switch button {
@@ -178,16 +239,16 @@ html[data-view="engineering"] .only-dashboard { display: none; }
   padding: 7px 14px;
   border-radius: 7px;
   background: transparent;
-  color: var(--theme-foreground-muted, #6b6880);
+  color: var(--muted);
   font: inherit;
   line-height: 1;
 }
 
 #view-switch button[aria-pressed="true"] {
-  background: #ffffff;
-  color: #1c1a2e;
-  font-weight: 500;
-  box-shadow: 0 1px 3px rgba(28, 26, 46, 0.12);
+  background: var(--amber-soft);
+  color: var(--amber-ink);
+  font-weight: 600;
+  box-shadow: none;
 }
 
 @media (max-width: 640px) {
@@ -202,17 +263,4 @@ html[data-view="engineering"] .only-dashboard { display: none; }
  * than this floor, so the rule only bites on a narrow screen. */
 form[class*="-table"] table {
   min-width: 40rem;
-}
-
-/* The Engineering view keeps Framework's own theme, whose muted foreground is
- * 60% of the ink mixed into the page. That paints the sidebar links and the
- * inactive half of the view switch at 4.10:1, just under the 4.5:1 that WCAG AA
- * asks of text this size. 66% clears it at 5.00:1 and reads the same.
- *
- * Light only. The dark theme mixes towards black, where a higher percentage
- * would make the same text worse. */
-@media (prefers-color-scheme: light) {
-  :root {
-    --theme-foreground-muted: color-mix(in srgb, #1b1e23 66%, #ffffff);
-  }
 }
