@@ -90,7 +90,8 @@ The sink adds the arrival time as it writes. The pipeline calls that column
 `srv`, and it is the server clock in the two lines further up this page.
 
 The sample on this site came from the dev sink. The published game posts to the
-Fly sink, and no capture from there has reached this pipeline yet.
+Fly sink only when you open it with `?rec=1`, so a passer by records nothing.
+No capture from there has reached this pipeline yet.
 
 ## What is on this site
 
