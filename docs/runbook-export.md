@@ -140,7 +140,7 @@ runbook tells you to avoid.
 | Backoff on 429 and 5xx | A retry that does not make things worse |
 | A high water mark on `srv` | Re-runs double count without it |
 | Round trip test, post then read back | Proving a few tuples survive both ways |
-| The span id collision fix | 18 of 4002 rows share an id, `docs/hlad.md` section 6 item 1 |
+| The span id collision fix | 18 of 5712 rows share an id, `docs/hlad.md` section 6 item 1 |
 
 The span id collision matters most. OTLP requires a unique span id per trace.
 One beat can drain two trace summaries, and `spans` carries no column that tells
