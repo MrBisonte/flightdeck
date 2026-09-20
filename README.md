@@ -83,6 +83,14 @@ that throttling does not explain.
 | `character_usage` | Which characters do players pick, and how many kills do they get? |
 | `reference_history` | What did the playbook say about this character before, and when did it change? |
 | `reference_governance` | How much of the reference data is under version control, per dimension? |
+| `run_pulse` | What did a run look like, second by second? |
+| `run_scorecard` | Who scored most, and how fast? |
+| `run_kill_events` | When did each kill land, to the millisecond? |
+| `kill_bursts` | How many kills landed in one hit? |
+| `kill_streaks` | How many kills chained inside a second? |
+| `kill_reconciliation` | Do the HUD counter and the event ring agree? |
+| `run_funnel` | How far did each run get? |
+| `character_combat` | How does each character fight? |
 
 ## Layout
 
@@ -116,10 +124,10 @@ Run it locally:
 npm install --prefix site && npm run dev --prefix site
 ```
 
-Pages today: Start here, Overview, Four clocks, The game, Governance, and
-Explore. Start here is the introduction. Overview is the dashboard. The game and
-Governance both read the gold layer, one for play and one for lineage. Explore
-runs the reader's own SQL.
+Pages today: Start here, Overview, Four clocks, The game, Players, Governance
+and Explore. Start here is the introduction. Overview is the dashboard. The
+game, Players and Governance all read the gold layer: one for play, one for the
+questions a player asks, one for lineage. Explore runs the reader's own SQL.
 
 DuckDB compiles to WebAssembly and runs inside the reader's tab, so Explore
 needs no server to answer a query. It declares every published table, lists
