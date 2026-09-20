@@ -422,6 +422,32 @@ html[data-view="dashboard"] #observablehq-main figure {
   tab-size: 4;
 }
 
+/* ---- Chart legend -------------------------------------------------------
+ *
+ * Plot writes its own legend for a colour scale. The replay panels on the
+ * Players page encode four things with no scale behind them: two lines and two
+ * shaded bands. The page writes that legend, so the swatch lives here.
+ */
+#observablehq-main p.legend {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 18px;
+  margin-top: 0.4rem;
+}
+
+#observablehq-main p.legend .key {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: -10px;
+  border: 1px solid var(--line);
+}
+
 /* ---- Sentences that are only true in one view --------------------------- */
 /* A page that says "the query sits above its result" must not say it while the
  * query is hidden. Each page carries both sentences and shows the true one. */
