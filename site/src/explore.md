@@ -86,7 +86,7 @@ let result;
 try {
   result = Inputs.table(await sql([query]), {rows: 15});
 } catch (error) {
-  result = html`<pre style="color:#c02626;white-space:pre-wrap">${error.message}</pre>`;
+  result = html`<pre style="color:var(--bad);white-space:pre-wrap">${error.message}</pre>`;
 }
 display(result);
 ```
