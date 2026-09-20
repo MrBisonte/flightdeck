@@ -128,7 +128,7 @@ Plot.plot({
   marks: [
     Plot.barX([{name: "busiest beat", value: l.peak}],
       {x: "value", y: "name", fill: "currentColor", fillOpacity: 0.65}),
-    Plot.ruleX([l.cap], {stroke: "red", strokeWidth: 2}),
+    Plot.ruleX([l.cap], {stroke: "var(--bad)", strokeWidth: 2}),
     Plot.text([{name: "busiest beat", value: l.peak}],
       {x: "value", y: "name", text: () => `${l.peak} of ${l.cap}, ${l.pct_of_cap}%`, dx: 6, textAnchor: "start"})
   ]
