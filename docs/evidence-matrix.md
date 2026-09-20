@@ -33,8 +33,8 @@ Each claim on this page maps to one of three things:
 | Records processed | 1546 | `contract_reconciliation` |
 | Reconciliation | 1545 clean + 1 quarantined = 1546 | `contract_reconciliation` |
 | Page loads across 4 files | 17 | `sessions` |
-| Clock agreement, localhost | 0 to 9 ms, mean 0.91 | `clock_skew`, `sessions` |
-| Clock agreement, published build | 473 to 571 ms, mean 478.07 | `clock_skew`, `sessions` |
+| Clock agreement, localhost | 0 to 9 ms, mean 0.91 | `clock_skew` |
+| Clock agreement, published build | 473 to 571 ms, mean 478.07 | `clock_skew` |
 | Gaps that throttling explains | 20 of 25 | `gap_explained` |
 | Gaps that throttling does not explain | 1, at 472.2s | `gap_explained` |
 | Crash to alarm, time to detection | 1.323 s | `incident_timeline` |
