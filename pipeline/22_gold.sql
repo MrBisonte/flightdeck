@@ -300,6 +300,41 @@ FROM numbered
 WHERE in_run AND run_seq >= 1;
 
 --------------------------------------------------------------------------------
+-- run_events. The event ring, placed inside the run it belongs to.
+--
+-- pulses carry srv, the server clock. The event ring carries only the page
+-- clock, so the two cannot be compared directly. A 1.5 s tolerance either side
+-- of the run's srv bounds absorbs the skew: clock_skew measures 0 to 9 ms on
+-- localhost and 473 to 593 ms on the published build, so 1500 ms clears the
+-- worst case by more than double and still cannot reach the next run, because
+-- no two runs in the fixtures start within three seconds of each other. A test
+-- pins that no event lands in two runs.
+--
+-- This sits above fact_run rather than with the other event views below,
+-- because fact_run counts kill events and cannot read a relation defined after
+-- it. One bridge, one home: run_kill_events and character_combat both read it
+-- rather than each repeating the join.
+--------------------------------------------------------------------------------
+CREATE OR REPLACE VIEW run_events AS
+WITH runs AS (
+    SELECT run_id, session_id, page_load_seq, character_key,
+           min(srv) AS s0, max(srv) AS s1
+    FROM run_pulse
+    GROUP BY run_id, session_id, page_load_seq, character_key
+)
+SELECT r.run_id, r.character_key, e.message, e."timestamp" AS ts
+FROM events e
+JOIN runs r ON e.session_id = r.session_id
+           AND e.page_load_seq = r.page_load_seq
+           AND e."timestamp" BETWEEN r.s0 - 1500 AND r.s1 + 1500;
+
+-- The kill events alone. Every event-grain view below stands on this.
+CREATE OR REPLACE VIEW run_kill_events AS
+SELECT run_id, character_key, message, ts
+FROM run_events
+WHERE message IN ('CROW_KILLED', 'SKELETON_KILLED');
+
+--------------------------------------------------------------------------------
 -- fact_run. One row per run.
 --
 -- kills is max(), not max() - min(), because the counter resets to zero at every
@@ -320,6 +355,9 @@ ended AS (
           AND p.srv > b.last_srv
     ) AS ended_on
     FROM bounds b
+),
+counted AS (
+    SELECT run_id, count(*) AS kill_events FROM run_kill_events GROUP BY run_id
 )
 SELECT r.run_id,
        r.session_id,
@@ -342,7 +380,14 @@ SELECT r.run_id,
        max(r.srv)                                              AS ended_srv,
        round((max(r.srv) - min(r.srv)) / 1000.0, 1)            AS duration_s,
        round(sum(CASE WHEN r.is_run_state THEN r.held_s ELSE 0 END), 1) AS sim_active_s,
+       -- Two claims about the same fact, both published. kills is the HUD
+       -- counter, which the game writes onto every pulse. kill_events counts
+       -- CROW_KILLED and SKELETON_KILLED in the ring. They disagree on the two
+       -- runs that walked into a second map, because the counter stops at the
+       -- first stage. kill_reconciliation publishes the difference, and
+       -- docs/defect-log.md records it as a game defect.
        max(r.kills)                                            AS kills,
+       CAST(coalesce(any_value(c.kill_events), 0) AS INTEGER)  AS kill_events,
        arg_min(r.hp, r.srv)                                    AS hp_first,
        min(r.hp)                                               AS hp_min,
        arg_max(r.hp, r.srv)                                    AS hp_last,
@@ -357,6 +402,7 @@ SELECT r.run_id,
        END                                                     AS outcome
 FROM run_pulse r
 LEFT JOIN ended e USING (run_id)
+LEFT JOIN counted c USING (run_id)
 GROUP BY r.run_id, r.session_id, r.page_load_seq, r.run_seq, r.client_id;
 
 --------------------------------------------------------------------------------
@@ -418,7 +464,8 @@ SELECT run_id || '/b' || encounter_seq AS encounter_id,
 FROM followed;
 
 --------------------------------------------------------------------------------
--- Metric views. The site reads these and computes nothing of its own.
+-- Metric views. The site reads these, and every number it shows comes from
+-- here rather than from a query a page invented.
 --------------------------------------------------------------------------------
 CREATE OR REPLACE VIEW game_summary AS
 SELECT count(*)                              AS runs,
@@ -469,3 +516,147 @@ SELECT outcome,
 FROM fact_run
 GROUP BY ALL
 ORDER BY runs DESC, outcome;
+
+--------------------------------------------------------------------------------
+-- Player-facing metric views.
+--
+-- The views above answer "what happened in the game". These answer what a
+-- player would ask: who scored most, how fast, how many at once, how far did
+-- the run get. Four of the six read the event ring through run_events, which
+-- nothing published had touched before.
+--------------------------------------------------------------------------------
+
+-- One row per run, ranked. Every figure a leaderboard needs, at the run grain.
+--
+-- rank_by_kills ranks on the HUD counter, not on kill_events, so the ranking
+-- and the number beside it come from the same claim. kill_events travels in the
+-- same row, and kill_reconciliation is where the two are put side by side.
+CREATE OR REPLACE VIEW run_scorecard AS
+WITH timed AS (
+    SELECT run_id, srv, state, kills, hp,
+           round((srv - min(srv) OVER (PARTITION BY run_id)) / 1000.0, 1)          AS t_s,
+           kills - coalesce(lag(kills) OVER (PARTITION BY run_id ORDER BY srv), 0) AS kills_this_beat
+    FROM run_pulse
+),
+marks AS (
+    SELECT run_id,
+           min(CASE WHEN kills >= 1  THEN t_s END)             AS t_first_kill_s,
+           min(CASE WHEN kills >= 50 THEN t_s END)             AS t_50_kills_s,
+           min(CASE WHEN state = 'boss_fight' THEN t_s END)    AS t_boss_s,
+           max(kills_this_beat)                                AS max_kills_one_beat,
+           max(hp) - min(hp)                                   AS hp_lost
+    FROM timed
+    GROUP BY run_id
+)
+SELECT CAST(rank() OVER (ORDER BY f.kills DESC, f.sim_active_s) AS INTEGER) AS rank_by_kills,
+       f.run_id,
+       f.character_key,
+       f.first_map,
+       f.maps_visited,
+       f.outcome,
+       f.kills,
+       f.kill_events,
+       f.duration_s,
+       f.sim_active_s,
+       round(f.kills * 60.0 / nullif(f.sim_active_s, 0), 1)    AS kills_per_min,
+       m.t_first_kill_s,
+       m.t_50_kills_s,
+       m.t_boss_s,
+       m.max_kills_one_beat,
+       m.hp_lost
+FROM fact_run f
+JOIN marks m USING (run_id);
+
+-- A burst is kills that land within 50 ms of each other: one hit, several
+-- kills. A streak is kills chained within 1 s. Both are the same window over
+-- the same stream, and the gap is the only thing that differs, so the window is
+-- written once and the gap is a parameter.
+CREATE OR REPLACE MACRO kill_groups(gap_ms) AS TABLE
+WITH g AS (
+    SELECT *,
+           CASE WHEN ts - lag(ts) OVER w > gap_ms OR lag(ts) OVER w IS NULL
+                THEN 1 ELSE 0 END AS opens
+    FROM run_kill_events
+    WINDOW w AS (PARTITION BY run_id ORDER BY ts)
+),
+n AS (
+    SELECT *,
+           CAST(sum(opens) OVER (PARTITION BY run_id ORDER BY ts ROWS UNBOUNDED PRECEDING)
+                AS INTEGER) AS group_id
+    FROM g
+)
+SELECT run_id,
+       character_key,
+       group_id,
+       CAST(count(*) AS INTEGER) AS kills,
+       max(ts) - min(ts)         AS span_ms,
+       min(ts)                   AS started_ts
+FROM n
+GROUP BY run_id, character_key, group_id;
+
+CREATE OR REPLACE VIEW kill_bursts  AS SELECT * FROM kill_groups(50);
+CREATE OR REPLACE VIEW kill_streaks AS SELECT * FROM kill_groups(1000);
+
+-- Two claims about the same fact. The HUD counter rides on every pulse, the
+-- kill events ride on the event ring. Where they disagree, this says so and by
+-- how much. It reads fact_run rather than recounting, so the number here and
+-- the number on the leaderboard cannot drift apart.
+CREATE OR REPLACE VIEW kill_reconciliation AS
+SELECT run_id,
+       character_key,
+       maps_visited,
+       kills                      AS counter_kills,
+       kill_events                AS event_kills,
+       kill_events - kills        AS events_minus_counter,
+       kill_events = kills        AS agrees
+FROM fact_run;
+
+-- How far each run got, as a funnel over states the reference dimension
+-- documents. A renamed state shows up in reference_history before it breaks
+-- this chart.
+CREATE OR REPLACE VIEW run_funnel AS
+SELECT 'started a run'             AS step, 1 AS step_seq, CAST(count(DISTINCT run_id) AS INTEGER) AS runs FROM run_pulse
+UNION ALL SELECT 'reached the boss entrance', 2, CAST(count(DISTINCT run_id) AS INTEGER) FROM run_pulse WHERE state = 'boss_entrance'
+UNION ALL SELECT 'fought the boss',           3, CAST(count(DISTINCT run_id) AS INTEGER) FROM run_pulse WHERE state = 'boss_fight'
+UNION ALL SELECT 'reached a reward screen',   4, CAST(count(DISTINCT run_id) AS INTEGER) FROM run_pulse WHERE state IN ('chooser', 'talents')
+UNION ALL SELECT 'entered a second stage',    5, CAST(count(DISTINCT run_id) AS INTEGER) FROM run_pulse WHERE state = 'stage_intro'
+UNION ALL SELECT 'won',                       6, CAST(count(DISTINCT run_id) AS INTEGER) FROM run_pulse WHERE state = 'win'
+ORDER BY step_seq;
+
+-- Combat profile per character from the event ring, normalised by seconds with
+-- the clock running. kills counts events, not the HUD counter, which is the
+-- rule kill_reconciliation exists to justify.
+CREATE OR REPLACE VIEW character_combat AS
+WITH agg AS (
+    SELECT character_key,
+           CAST(sum(message IN ('WEAPON_FIRED', 'ICE_BOLT_FIRED')) AS INTEGER) AS shots,
+           CAST(sum(message = 'ARROW_MISS')                        AS INTEGER) AS misses,
+           CAST(sum(message IN ('CROW_KILLED', 'SKELETON_KILLED'))  AS INTEGER) AS kills,
+           CAST(sum(message = 'PLAYER_HIT')                        AS INTEGER) AS hits_taken,
+           CAST(sum(message = 'PICKUP_TAKEN')                      AS INTEGER) AS pickups,
+           CAST(sum(message = 'BOSS_HIT')                          AS INTEGER) AS boss_hits
+    FROM run_events
+    GROUP BY character_key
+),
+sim AS (
+    SELECT character_key,
+           sum(sim_active_s)          AS sim_s,
+           CAST(count(*) AS INTEGER)  AS runs
+    FROM fact_run
+    GROUP BY character_key
+)
+SELECT a.character_key,
+       s.runs,
+       s.sim_s,
+       a.shots,
+       a.misses,
+       a.kills,
+       round(a.kills / nullif(a.shots, 0), 2)     AS kills_per_shot,
+       round(a.kills * 60.0 / s.sim_s, 1)         AS kills_per_min,
+       a.hits_taken,
+       round(a.hits_taken * 60.0 / s.sim_s, 2)    AS hits_taken_per_min,
+       a.pickups,
+       a.boss_hits
+FROM agg a
+JOIN sim s USING (character_key)
+ORDER BY a.character_key;
