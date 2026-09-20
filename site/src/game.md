@@ -94,8 +94,8 @@ display(Plot.plot({
   x: {label: "seconds", grid: true},
   y: {label: null},
   marks: [
-    Plot.barX(runs, {y: "run", x: "wall_s", fill: "#d0d7de", sort: {y: "x"}}),
-    Plot.barX(runs, {y: "run", x: "playing_s", fill: "#6d5ae0"}),
+    Plot.barX(runs, {y: "run", x: "wall_s", fill: "var(--faint)", sort: {y: "x"}}),
+    Plot.barX(runs, {y: "run", x: "playing_s", fill: "var(--amber)"}),
     Plot.ruleX([0])
   ]
 }));
@@ -131,7 +131,7 @@ display(Plot.plot({
   x: {label: "seconds played", grid: true},
   y: {label: null},
   marks: [
-    Plot.barX(chars, {y: "character", x: "playing_s", fill: "#6d5ae0", sort: {y: "-x"}}),
+    Plot.barX(chars, {y: "character", x: "playing_s", fill: "var(--amber)", sort: {y: "-x"}}),
     Plot.ruleX([0])
   ]
 }));
