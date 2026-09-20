@@ -412,6 +412,7 @@ html[data-view="dashboard"] #observablehq-main figure {
 #observablehq-main details.sql summary b { color: var(--amber-ink); font-weight: 600; }
 
 #observablehq-main details.sql .observablehq-pre-container { margin: 0; }
+#observablehq-main details.sql .observablehq-pre-container::after { content: none; }
 #observablehq-main details.sql pre {
   margin: 0;
   padding: 4px 16px 14px;
@@ -425,7 +426,7 @@ html[data-view="dashboard"] #observablehq-main figure {
 /* A page that says "the query sits above its result" must not say it while the
  * query is hidden. Each page carries both sentences and shows the true one. */
 html[data-view="dashboard"] .only-engineering { display: none; }
-html[data-view="engineering"] .only-dashboard { display: none; }
+html:not([data-view="dashboard"]) .only-dashboard { display: none; }
 
 /* ---- The header --------------------------------------------------------
  *
@@ -571,14 +572,31 @@ html[data-view="dashboard"] .switch button[aria-pressed="true"] { color: var(--i
 :root {
   --page-width: 1080px;
   --page-gutter: clamp(16px, 4vw, 40px);
+  /* Taller than the 56px header, so a heading reached by its anchor link does
+   * not land underneath it. Framework sets 2.5rem here for a header this site
+   * does not use. */
+  scroll-padding-top: 72px;
 }
 
-#observablehq-main {
+/* Framework caps the body at 1440px and gives the centre column a flat 32px
+ * margin. Both are a second gutter stacked on the one this file sets, so the
+ * wordmark and the prose start in different places below 1144px, and the
+ * header's rule stops short of the window on a wide screen. The column below
+ * carries its own width and centres itself, so neither is needed. */
+body { max-width: none; }
+#observablehq-center { margin: 0; }
+
+#observablehq-main,
+#observablehq-footer {
   box-sizing: border-box;
   max-width: var(--page-width);
   margin-inline: auto;
   padding-inline: var(--page-gutter);
 }
+
+/* The pager is two cards on a 640px grid inside a 1080px column, which is the
+ * short measure this file exists to remove. */
+#observablehq-footer nav { max-width: none; }
 
 #observablehq-main h1,
 #observablehq-main h2,
@@ -592,7 +610,9 @@ html[data-view="dashboard"] .switch button[aria-pressed="true"] { color: var(--i
 #observablehq-main ul,
 #observablehq-main table,
 #observablehq-main figure,
-#observablehq-main figcaption { max-width: none; }
+#observablehq-main figcaption,
+#observablehq-main pre,
+#observablehq-main .observablehq-pre-container { max-width: none; }
 
 /* Inputs.table renders with table-layout: fixed and a width equal to its box,
  * so on a 375px screen an eight column table gives every column 32px and clips
