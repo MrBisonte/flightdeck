@@ -104,9 +104,9 @@ No capture from there has reached this pipeline yet.
 
 ## What this is not
 
-The sample is small. The Overview page prints how small, from a query. Read
-these pages as a demonstration of the method, not as a large study.
+This is a demonstration of the method, not a large study. The sample is small,
+and the Overview page prints how small, from a query over the published Parquet.
 
-The pipeline holds every query. This site holds none of them. A page here
-selects, casts, orders and formats what the pipeline published, and nothing
-more. A number the pipeline does not publish is a number this site cannot show.
+A number the pipeline does not publish is a number this site cannot show. A page
+reads that Parquet and may count and rank what it holds, but it adds no source
+of its own.
