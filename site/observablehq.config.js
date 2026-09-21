@@ -21,6 +21,7 @@ const pages = [
   {name: "Overview", path: "/overview"},
   {name: "Four clocks", path: "/four-clocks"},
   {name: "The game", path: "/game"},
+  {name: "Players", path: "/players"},
   {name: "Governance", path: "/governance"},
   {name: "Explore", path: "/explore"}
 ];

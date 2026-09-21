@@ -14,6 +14,12 @@ The assumptions:
     lands as DOUBLE, so a consumer would have to cast it back.
   - No column anywhere claims a boss was killed. The recorder emits no defeat
     event, so the strongest word available is "progressed".
+  - The event ring reaches a run through a 1.5 s tolerance on the run's srv
+    bounds. No two runs sit close enough for one event to land in both, so
+    kill_events sums to the ring's own kill count and not more.
+  - The HUD counter and the kill events disagree on exactly the runs that
+    entered a second stage. That is the defect in docs/defect-log.md, and a
+    third disagreeing run would mean the cause is something else.
 """
 import pathlib
 
@@ -33,7 +39,10 @@ pytestmark = pytest.mark.skipif(
 def con():
     c = duckdb.connect()
     for name in ("fact_run", "fact_boss_encounter", "game_summary",
-                 "character_usage", "boss_encounters_by_kind", "run_outcomes"):
+                 "character_usage", "boss_encounters_by_kind", "run_outcomes",
+                 "run_pulse", "run_scorecard", "run_kill_events", "kill_bursts",
+                 "kill_streaks", "kill_reconciliation", "run_funnel",
+                 "character_combat"):
         path = (CURATED / f"{name}.parquet").as_posix()
         c.execute(f"CREATE VIEW {name} AS SELECT * FROM read_parquet('{path}')")
     return c
@@ -200,3 +209,192 @@ def test_contract_caps_are_type_two(con):
     closed_open, = one(con,
         "SELECT count(*) FROM cap_history WHERE NOT is_current AND valid_to IS NULL")
     assert closed_open == 0, "a superseded row must carry a valid_to"
+
+
+# --------------------------------------------------------------------------
+# The event ring, and the bridge that places it inside a run
+# --------------------------------------------------------------------------
+def test_no_event_lands_in_two_runs(con):
+    """The bridge is a time window, so overlap is the failure it can have.
+
+    Every count built on run_events is wrong by exactly the overlap if two runs
+    sit close enough for the 1.5 s tolerance to reach both.
+    """
+    overlapping, = one(con, """
+        WITH runs AS (
+            SELECT run_id, session_id, page_load_seq, min(srv) AS s0, max(srv) AS s1
+            FROM run_pulse GROUP BY ALL
+        )
+        SELECT count(*) FROM runs a JOIN runs b
+          ON a.session_id = b.session_id
+         AND a.page_load_seq = b.page_load_seq
+         AND a.run_id < b.run_id
+         AND a.s1 + 1500 >= b.s0 - 1500
+    """)
+    assert overlapping == 0
+
+
+def test_kill_events_sum_to_the_rings_own_count(con):
+    """466 kill events in the fixtures. The bridge must lose none and invent none."""
+    total, = one(con, "SELECT sum(kill_events) FROM fact_run")
+    assert total == 466
+    bridged, = one(con, "SELECT count(*) FROM run_kill_events")
+    assert bridged == 466
+
+
+def test_kill_events_is_an_integer_in_parquet(con):
+    path = (CURATED / "fact_run.parquet").as_posix()
+    types = dict(con.execute(
+        f"SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM read_parquet('{path}'))"
+    ).fetchall())
+    assert types["kill_events"] == "INTEGER"
+
+
+def test_the_counter_stays_published_beside_the_events(con):
+    """The rule is that both claims ship. Dropping either hides the defect."""
+    path = (CURATED / "fact_run.parquet").as_posix()
+    columns = {r[0] for r in con.execute(
+        f"SELECT column_name FROM (DESCRIBE SELECT * FROM read_parquet('{path}'))"
+    ).fetchall()}
+    assert {"kills", "kill_events"} <= columns
+
+
+# --------------------------------------------------------------------------
+# The finding: the HUD counter stops at the first stage
+# --------------------------------------------------------------------------
+def test_exactly_two_runs_disagree_and_by_the_known_amounts(con):
+    rows = con.execute("""
+        SELECT maps_visited, events_minus_counter
+        FROM kill_reconciliation WHERE NOT agrees
+        ORDER BY events_minus_counter
+    """).fetchall()
+    assert rows == [(2, 7), (3, 36)]
+
+
+def test_only_multi_map_runs_disagree(con):
+    """The claim the defect log makes. A single-map disagreement would break it."""
+    bad, = one(con, """
+        SELECT count(*) FROM kill_reconciliation
+        WHERE NOT agrees AND maps_visited = 1
+    """)
+    assert bad == 0
+    silent, = one(con, """
+        SELECT count(*) FROM kill_reconciliation
+        WHERE agrees AND maps_visited > 1
+    """)
+    assert silent == 0, "a multi-map run that agrees would mean the cause is not the stage"
+
+
+def test_reconciliation_covers_every_run(con):
+    rows, runs = one(con, """
+        SELECT (SELECT count(*) FROM kill_reconciliation), (SELECT count(*) FROM fact_run)
+    """)
+    assert rows == runs
+
+
+# --------------------------------------------------------------------------
+# Bursts and streaks: one window, one parameter
+# --------------------------------------------------------------------------
+def test_the_biggest_burst_is_one_cast(con):
+    """23 kills in 9 ms. A single hit, which is the number the page leads on."""
+    row = one(con, """
+        SELECT kills, span_ms, character_key FROM kill_bursts
+        ORDER BY kills DESC, span_ms LIMIT 1
+    """)
+    assert row == (23, 9, "wizard")
+
+
+def test_a_burst_chains_and_so_can_outrun_its_own_gap(con):
+    """Each consecutive gap is at most 50 ms. The span of the chain is not capped.
+
+    One burst in the fixtures spans 51 ms for that reason. The distinction
+    matters because a reader who takes span_ms as the definition would call it
+    a bug.
+    """
+    over, = one(con, "SELECT count(*) FROM kill_bursts WHERE span_ms > 50")
+    assert over == 1
+
+
+def test_every_kill_event_belongs_to_exactly_one_group(con):
+    for view in ("kill_bursts", "kill_streaks"):
+        grouped, = one(con, f"SELECT sum(kills) FROM {view}")
+        assert grouped == 466, f"{view} lost or duplicated a kill"
+
+
+def test_a_streak_is_never_finer_than_a_burst(con):
+    """Same window, wider gap. So streaks group at least as much as bursts."""
+    bursts, streaks = one(con, """
+        SELECT (SELECT count(*) FROM kill_bursts), (SELECT count(*) FROM kill_streaks)
+    """)
+    assert streaks <= bursts
+
+
+# --------------------------------------------------------------------------
+# The funnel and the combat profile
+# --------------------------------------------------------------------------
+def test_the_funnel_is_the_known_shape(con):
+    rows = con.execute("SELECT runs FROM run_funnel ORDER BY step_seq").fetchall()
+    assert [r[0] for r in rows] == [8, 6, 6, 2, 2, 0]
+
+
+def test_the_funnel_never_claims_a_win(con):
+    """win is a documented state nobody reached. The zero is the point."""
+    won, = one(con, "SELECT runs FROM run_funnel WHERE step = 'won'")
+    assert won == 0
+
+
+def test_the_funnel_starts_from_every_run(con):
+    first, runs = one(con, """
+        SELECT (SELECT runs FROM run_funnel WHERE step_seq = 1),
+               (SELECT count(*) FROM fact_run)
+    """)
+    assert first == runs
+
+
+def test_character_combat_counts_events_not_the_counter(con):
+    """The rule from kill_reconciliation, applied. The two multi-map runs are
+    why the sum here sits above the sum of the HUD counters."""
+    combat, counter = one(con, """
+        SELECT (SELECT sum(kills) FROM character_combat),
+               (SELECT sum(kills) FROM fact_run)
+    """)
+    assert combat == 466
+    assert combat > counter
+
+
+def test_character_combat_covers_every_played_character(con):
+    profiled, played = one(con, """
+        SELECT (SELECT count(*) FROM character_combat),
+               (SELECT count(DISTINCT character_key) FROM fact_run)
+    """)
+    assert profiled == played
+
+
+def test_the_wizard_has_no_miss_event(con):
+    """A cast cannot miss in the wire format, so kills per shot is not comparable
+    across characters without saying so. The page says so."""
+    misses, = one(con, "SELECT misses FROM character_combat WHERE character_key = 'wizard'")
+    assert misses == 0
+
+
+# --------------------------------------------------------------------------
+# The leaderboard ranks the counter, deliberately
+# --------------------------------------------------------------------------
+def test_the_scorecard_ranks_on_the_counter_not_the_events(con):
+    """Both claims travel in the row. The rank follows the number beside it."""
+    top = one(con, """
+        SELECT kills, kill_events FROM run_scorecard ORDER BY rank_by_kills LIMIT 1
+    """)
+    assert top == (99, 99)
+    inverted, = one(con, """
+        SELECT count(*) FROM run_scorecard a JOIN run_scorecard b
+          ON a.rank_by_kills < b.rank_by_kills AND a.kills < b.kills
+    """)
+    assert inverted == 0
+
+
+def test_the_scorecard_covers_every_run(con):
+    rows, runs = one(con, """
+        SELECT (SELECT count(*) FROM run_scorecard), (SELECT count(*) FROM fact_run)
+    """)
+    assert rows == runs

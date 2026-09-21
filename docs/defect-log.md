@@ -4,22 +4,24 @@ Every defect found while building this repository: what broke, why, and what
 fixed it.
 
 The log exists because a pipeline that claims to find problems in other people's
-data has to account for the problems in its own build. This log lists sixteen
-defects. All sixteen are closed.
+data has to account for the problems in its own build. This log lists seventeen
+defects. The sixteen in this repository are closed. The seventeenth is in the
+game this pipeline reads. That project owns the fix.
 
 ## Summary
 
 | Severity | Count | Meaning |
 |---|---|---|
-| High | 9 | Would reach a user, break the demo, or disclose information |
+| High | 10 | Would reach a user, break the demo, or disclose information |
 | Medium | 7 | Caught inside the build, or degrades quality without breaking it |
 
 | Category | Count |
 |---|---|
-| Data contract and schema | 3 |
+| Data contract and schema | 4 |
 | Tooling and gates | 8 |
 | Build and packaging | 2 |
 | Process | 2 |
+| Source telemetry | 1 |
 
 ## Which control caught what
 
@@ -33,12 +35,14 @@ The table shows which control earned its place.
 | CI | 2 | DEF-05, DEF-06 |
 | Manual check | 2 | DEF-07, DEF-12 |
 | Peer review | 1 | DEF-10 |
+| Reconciling two sources | 1 | DEF-17 |
 
 ```
    tests + gates   ->  6 defects   found before anything ran end to end
    CI              ->  2 defects   found on a clean machine, not this one
    rehearsal       ->  5 defects   found only by running the real path
    review          ->  1 defect    found only by a second reader
+   reconciliation  ->  1 defect    found only by counting the same fact twice
 ```
 
 Only a live capture reached DEF-08, DEF-09, DEF-13, DEF-14 and DEF-16, and no
@@ -280,9 +284,27 @@ could not appear on the committed fixtures, because one person on one machine
 never has two page loads open at once. A deployment is the case where that
 stops being true.
 
+### DEF-17. The HUD kill counter stops counting after the first stage
+
+| Field | Detail |
+|---|---|
+| **Severity** | High |
+| **Category** | Source telemetry |
+| **Symptom** | Two runs report fewer kills than the event ring recorded for the same run. A leaderboard ranking on the counter puts both below runs they beat |
+| **Root cause** | The kill counter the game writes onto every pulse does not resume after a stage change. In the three map run the counter read 35 when the forest ended and still read 35 at the end, while 36 more `CROW_KILLED` and `SKELETON_KILLED` events fired in the castle. The two map run shows the same shape: 98 at the end of the forest, 7 more events after the stage changed, counter unchanged. Every single map run agrees exactly |
+| **Resolution** | Not fixed here. The defect is in the game, not in this pipeline, and a counter that stopped cannot be recovered from the pulses. `fact_run` publishes both claims: `kills` stays the counter and `kill_events` counts the ring. `kill_reconciliation` publishes the difference per run, `character_combat` counts events, and the Players page shows the disagreement rather than hiding it |
+| **Found by** | Reconciling two sources while building the Players page |
+| **Fixed in** | Open in crow-archer. This repository reports the defect rather than correcting it |
+
+**Note.** Nothing here may invent the missing kills, so the pipeline publishes
+the gap instead. `tests/test_gold.py` fails if a third run disagrees, or if a
+single map run ever does. Either would mean the cause is not the stage change.
+A `STAGE_CLEARED` event carrying the counter at reset would make the
+reconciliation exact per stage rather than per run.
+
 ## What the log says
 
-Three patterns come out of sixteen entries.
+Four patterns come out of seventeen entries.
 
 1. **Controls that always pass are invisible.** DEF-03, DEF-11 and DEF-15 all
    produced a green result over a check that tested less than it claimed. Each
@@ -293,6 +315,9 @@ Three patterns come out of sixteen entries.
    no fixture and no test had ever arranged.
 3. **Some defects need a second reader.** DEF-10 passed every automated gate.
    Review caught it.
+4. **Some defects are in the system you read, not the one you build.** DEF-17
+   is a game defect. The same fact arrives twice, on the pulse and on the event
+   ring. Counting the two against each other is what surfaced it.
 
 The pipeline this repository builds applies the same three ideas to telemetry.
 It reconciles its counts in public, it quarantines with a reason rather than
