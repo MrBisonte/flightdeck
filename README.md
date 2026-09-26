@@ -124,6 +124,18 @@ Run it locally:
 npm install --prefix site && npm run dev --prefix site
 ```
 
+The site build runs the pipeline. `src/data/curated.zip.sh` calls `demo.sh` and
+ships what it publishes, so the site cannot disagree with the pipeline about a
+number. That also means the build needs a POSIX shell. On Windows, run it from
+Git Bash rather than PowerShell, which has no `sh` for the loaders to use:
+
+```bash
+& "C:\Program Files\Git\bin\bash.exe" -c "cd /c/path/to/flightdeck && ./demo.sh build && npm run clean --prefix site && npm run build --prefix site"
+```
+
+`npm run clean` empties the loader cache. Run it whenever the pipeline adds or
+renames a Parquet file, or the build fails with `Not found: <name>.parquet`.
+
 Pages today: Start here, Overview, Four clocks, The game, Players, Governance
 and Explore. Start here is the introduction. Overview is the dashboard. The
 game, Players and Governance all read the gold layer: one for play, one for the
