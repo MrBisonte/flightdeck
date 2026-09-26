@@ -1,0 +1,18 @@
+# Line endings.
+#
+# core.autocrlf is a per machine setting, so a Windows clone rewrites every
+# text file to CRLF on checkout unless a rule here says otherwise. A shell
+# script cannot survive that. `set -euo pipefail` becomes `set -euo pipefail\r`,
+# and the shell rejects an option named "pipefail\r" rather than running the
+# script, which is how demo.sh stopped working from anything but Git Bash.
+#
+# The committed blobs were always LF. This file makes the working tree agree
+# with them, on every machine, whatever core.autocrlf says locally.
+* text=auto eol=lf
+
+# Binary. Never touched, never diffed as text.
+*.parquet binary
+*.duckdb  binary
+*.png     binary
+*.jpg     binary
+*.zip     binary
