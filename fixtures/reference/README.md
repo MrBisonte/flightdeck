@@ -63,10 +63,11 @@ that and joins it here.
 | `note` | Which deployment this row describes |
 
 Two consumers read the file and neither keeps its own copy.
-[`scripts/sanitize_flightlog.py`](../../scripts/sanitize_flightlog.py) keeps a
-listed origin in a live capture and masks the rest.
-[`pipeline/25_publish.sql`](../../pipeline/25_publish.sql) applies
-`may_publish` at the boundary of the public site.
+
+| Consumer | Rule |
+|---|---|
+| [`scripts/sanitize_flightlog.py`](../../scripts/sanitize_flightlog.py), live capture | `href` keeps a listed origin. Every other string keeps only an origin whose `may_publish` is true, because free text has no column the publish step could withhold |
+| [`pipeline/25_publish.sql`](../../pipeline/25_publish.sql) | Withholds `sessions.origin` at the boundary of the public site unless `may_publish` is true |
 
 The `.invalid` row is the mask. RFC 2606 reserves that suffix, so a mask can
 never name a real host. One mask and not one per class: a class for an unlisted
