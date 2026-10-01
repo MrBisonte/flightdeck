@@ -15,10 +15,14 @@ under ``fixtures/raw`` take this route. That directory sits in a public repo,
 so it is already published and carries no origin at all.
 
 ``mask_origins`` keeps an origin that ``fixtures/reference/origins.csv`` lists
-and masks every other one down to its class. A live capture takes this route,
-because the origin a session came from is data worth keeping. The allowlist
-fails closed. An origin nobody listed is masked, never passed through, which is
-the property a denylist cannot offer. See DEF-13 in ``docs/defect-log.md``.
+and masks every other one down to its class. A live capture takes this route in
+``href``, because the origin a session came from is data worth keeping. Every
+other string of a live capture takes ``mask_withheld``, which also masks a listed
+origin whose ``may_publish`` is false. An error message has no column of its own
+for the publish step to withhold, so a withheld origin there is masked before
+the pipeline reads it. The allowlist fails closed. An origin nobody listed is
+masked, never passed through, which is the property a denylist cannot offer. See
+DEF-13 in ``docs/defect-log.md``.
 
 The script is deterministic and re-runnable: sanitizing an already sanitized
 file is a no-op, which is what makes ``--check`` meaningful.
@@ -136,10 +140,21 @@ def scrub_origins(text: str) -> str:
     return ORIGIN.sub(LOCALHOST, text)
 
 
-def mask_origins(text: str) -> str:
-    """Keep a listed origin, mask the rest. The rule for a live capture."""
-    allowed = listed_origins()
+def keep_only(text: str, allowed: frozenset[str]) -> str:
+    """Keep an origin in ``allowed``, mask every other one."""
     return ORIGIN.sub(lambda m: m.group(0) if m.group(0) in allowed else MASK, text)
+
+
+def mask_origins(text: str) -> str:
+    """Keep a listed origin, mask the rest. The rule for ``href`` in a live
+    capture, because the typed layer parses the origin of a page load from it."""
+    return keep_only(text, listed_origins())
+
+
+def mask_withheld(text: str) -> str:
+    """Keep an origin that may publish, mask the rest. The rule for every other
+    string in a live capture."""
+    return keep_only(text, publishable_origins())
 
 
 def scrub_deep(value, rewrite=scrub_origins):
@@ -165,6 +180,20 @@ def sanitize_record(rec: dict, rewrite=scrub_origins) -> dict:
     rec = scrub_deep(rec, rewrite)
     if "ua" in rec:
         rec["ua"] = browser_family(rec["ua"])
+    return rec
+
+
+def sanitize_live_record(rec: dict) -> dict:
+    """Sanitize one record of a live capture.
+
+    ``href`` keeps a withheld origin, because ``25_publish.sql`` withholds the
+    column parsed from it. Every other string loses it here, because nothing
+    downstream can withhold an origin inside free text.
+    """
+    href = rec.get("href")
+    rec = sanitize_record(rec, mask_withheld)
+    if href is not None:
+        rec["href"] = mask_origins(href)
     return rec
 
 
@@ -198,7 +227,7 @@ def check_clean(path: pathlib.Path, allowed=None) -> list[str]:
     return problems
 
 
-def sanitize_dir(src: pathlib.Path, dst: pathlib.Path, rewrite, allowed) -> int:
+def sanitize_dir(src: pathlib.Path, dst: pathlib.Path, sanitize, allowed) -> int:
     dst.mkdir(parents=True, exist_ok=True)
     files = sorted(src.glob("*.jsonl"))
     if not files:
@@ -209,7 +238,7 @@ def sanitize_dir(src: pathlib.Path, dst: pathlib.Path, rewrite, allowed) -> int:
         for line in path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
-            out_lines.append(json.dumps(sanitize_record(json.loads(line), rewrite),
+            out_lines.append(json.dumps(sanitize(json.loads(line)),
                                         separators=(",", ":"), sort_keys=False))
         target = dst / path.name
         target.write_text("\n".join(out_lines) + "\n", encoding="utf-8",
@@ -240,10 +269,10 @@ def main(argv: list[str]) -> int:
         return 0
     if len(argv) == 4 and argv[1] == "--live":
         return sanitize_dir(pathlib.Path(argv[2]), pathlib.Path(argv[3]),
-                            mask_origins, listed_origins())
+                            sanitize_live_record, listed_origins())
     if len(argv) == 3:
         return sanitize_dir(pathlib.Path(argv[1]), pathlib.Path(argv[2]),
-                            scrub_origins, FIXTURE_ORIGINS)
+                            sanitize_record, FIXTURE_ORIGINS)
     print(__doc__)
     return 2
 

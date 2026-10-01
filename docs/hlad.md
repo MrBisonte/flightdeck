@@ -602,7 +602,7 @@ still add up. That is the point of the quarantine relation.
 | 7 | `blockers.frozen` and `blockers.dashing` read 0 in every fixture row | fixtures | Open, no evidence |
 | 8 | Observed ranges come from 3 sessions. A wider range is likely | fixtures | Accepted |
 | 9 | `dim_app_state` was Type 1, so reclassifying `is_run_state` rewrote `fact_run.sim_active_s` for every past run. It is Type 2 now, and `run_pulse` joins the version in force when each pulse arrived. ADR 0004 | pipeline | Closed |
-| 10 | `may_publish` governs `sessions.origin` and nothing else. A withheld origin that lands inside free text, such as `errors.msg`, would still reach the site. `tests/test_live_path.py` scans the published bytes for one, which catches it rather than preventing it | pipeline | Open, needs approval |
+| 10 | `may_publish` governed `sessions.origin` and nothing else, so a withheld origin inside `errors.msg` reached the site. The live sanitizer now masks a withheld origin in every string except `href`, and `tests/test_live_path.py` searches every published value for one | pipeline | Closed |
 | 11 | A capture from `https://mrbisonte.github.io` was missing. PR #15 added one, recorded through the Fly sink with `?rec=1` | crow-archer | Closed |
 
 ---
