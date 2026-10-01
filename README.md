@@ -150,6 +150,8 @@ records the sizing that makes this work.
 
 [docs/adr/0002-version-the-reference-dimensions.md](docs/adr/0002-version-the-reference-dimensions.md)
 records why two dimensions keep their history and the other two do not.
+[docs/adr/0003-declare-valid-time-in-the-reference-files.md](docs/adr/0003-declare-valid-time-in-the-reference-files.md)
+records where the dates in that history come from.
 
 Every page has two views, switched from the control in the top right.
 Engineering prints each query above its result. Dashboard hides the SQL and

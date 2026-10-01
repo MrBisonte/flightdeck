@@ -442,21 +442,22 @@ current-version table, so a metric view joins `dim_character` and never a
 filter. `reference_history` publishes every version of both, and
 `reference_governance` counts them per dimension for the Governance page.
 
-**What `valid_from` means here.** It is transaction time. It records the moment
-the pipeline first saw the value, not the moment the value became true in the
-game. The reference CSVs carry a key and a note, and no dates, so no other
-reading is available from them.
+**What `valid_from` means here.** It is valid time, declared in the file that
+holds the value. A rebuild from an empty warehouse shows the same history. A
+member dates from the first crow-archer `master` commit whose `src/` names it. A
+cap dates from the commit that declared it in `contracts/flight_log.yml`. ADR
+0003 records why the two sources differ.
 
-That has one consequence, and stating it is cheaper than leaving a reader to
-find it. An as-of join against a fact's own timestamp is not supported. Every
-version starts after every fact in this warehouse, so such a join would resolve
-nothing. Facts join the current version instead, which is what `dim_character`
-already hands them.
+Every member predates every fact, so an as-of join against a fact's own
+timestamp resolves. Facts still join the current version through
+`dim_character`, and no published view uses the as-of join yet.
 
-**Verified.** The four fixture sessions produce nine versioned members, each at
-version 1. `tests/test_versioned_dimensions.py` edits the playbook between two
-gold runs. It pins four cases: a changed description, a withdrawn member, a new
-member, and an untouched member that must stay at one row.
+**Verified.** Two builds from an empty warehouse produce the same nine members,
+each at version 1, and the same five caps. `tests/test_versioned_dimensions.py`
+declares a second history in a copy of the tree. It pins four cases: a changed
+description, a withdrawn member, a new member, and an untouched member that
+stays at one row. `tests/test_gold.py` finds exactly one version in force for
+every run and every boss encounter.
 
 ---
 
