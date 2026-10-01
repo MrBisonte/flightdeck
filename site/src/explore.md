@@ -2,7 +2,9 @@
 title: Explore
 sql:
   alarms_by_class: ./data/curated/alarms_by_class.parquet
+  app_state_history: ./data/curated/app_state_history.parquet
   boss_encounters_by_kind: ./data/curated/boss_encounters_by_kind.parquet
+  character_combat: ./data/curated/character_combat.parquet
   character_usage: ./data/curated/character_usage.parquet
   clock_skew: ./data/curated/clock_skew.parquet
   contract_cap_history: ./data/curated/contract_cap_history.parquet
@@ -15,13 +17,21 @@ sql:
   game_summary: ./data/curated/game_summary.parquet
   gap_explained: ./data/curated/gap_explained.parquet
   incident_timeline: ./data/curated/incident_timeline.parquet
+  kill_bursts: ./data/curated/kill_bursts.parquet
+  kill_reconciliation: ./data/curated/kill_reconciliation.parquet
+  kill_streaks: ./data/curated/kill_streaks.parquet
   loss_accounting: ./data/curated/loss_accounting.parquet
   quarantine: ./data/curated/quarantine.parquet
   reference_governance: ./data/curated/reference_governance.parquet
   reference_history: ./data/curated/reference_history.parquet
+  run_funnel: ./data/curated/run_funnel.parquet
+  run_kill_events: ./data/curated/run_kill_events.parquet
   run_outcomes: ./data/curated/run_outcomes.parquet
+  run_pulse: ./data/curated/run_pulse.parquet
+  run_scorecard: ./data/curated/run_scorecard.parquet
   session_context: ./data/curated/session_context.parquet
   session_summary: ./data/curated/session_summary.parquet
+  sessions: ./data/curated/sessions.parquet
   spans: ./data/curated/spans.parquet
   srv_gaps: ./data/curated/srv_gaps.parquet
   warehouse_manifest: ./data/curated/warehouse_manifest.parquet
@@ -58,7 +68,7 @@ SELECT table_name,
        column_name,
        data_type
 FROM duckdb_columns()
-WHERE schema_name = 'main'
+WHERE NOT internal
 ORDER BY table_name, column_index
 ```
 

@@ -27,6 +27,27 @@ wire format.
 | `characters.csv` | 5 | The pulse table |
 | `boss_kinds.csv` | 4 | The observed boss values |
 
+## Versions and dates
+
+`app_states.csv`, `characters.csv` and `boss_kinds.csv` hold one row per
+version, and each row declares when it was valid.
+
+| Column | Meaning |
+|---|---|
+| `valid_from` | UTC commit date of the first crow-archer `master` commit whose `src/` contains the key as a quoted literal |
+| `valid_to` | Empty while the version is in force |
+
+To change a description, give the current row a `valid_to` and add a row that
+starts at the same instant. To withdraw a member, give its row a `valid_to` and
+add nothing. Never edit a description in place or delete a row: the file is
+the history, and every build rebuilds the dimension from it.
+
+To reproduce a date, run this in a crow-archer clone:
+
+```bash
+git log origin/master --reverse -G"[\"'\`]sapper[\"'\`]" --format=%cI -- src | head -1
+```
+
 ## `origins.csv`, the fifth table
 
 This one has a different source. The playbook documents the wire format, and
@@ -42,10 +63,11 @@ that and joins it here.
 | `note` | Which deployment this row describes |
 
 Two consumers read the file and neither keeps its own copy.
-[`scripts/sanitize_flightlog.py`](../../scripts/sanitize_flightlog.py) keeps a
-listed origin in a live capture and masks the rest.
-[`pipeline/25_publish.sql`](../../pipeline/25_publish.sql) applies
-`may_publish` at the boundary of the public site.
+
+| Consumer | Rule |
+|---|---|
+| [`scripts/sanitize_flightlog.py`](../../scripts/sanitize_flightlog.py), live capture | `href` keeps a listed origin. Every other string keeps only an origin whose `may_publish` is true, because free text has no column the publish step could withhold |
+| [`pipeline/25_publish.sql`](../../pipeline/25_publish.sql) | Withholds `sessions.origin` at the boundary of the public site unless `may_publish` is true |
 
 The `.invalid` row is the mask. RFC 2606 reserves that suffix, so a mask can
 never name a real host. One mask and not one per class: a class for an unlisted
@@ -70,7 +92,7 @@ The join does two jobs.
 
 | Dimension | Played | Documented | Coverage | Never played |
 |---|---|---|---|---|
-| `state` | 10 | 15 | 67% | controls, inventory, mapselect, multiplayer, win |
+| `state` | 11 | 15 | 73% | controls, mapselect, multiplayer, win |
 | `mode` | 1 | 3 | 33% | siege, waves |
 | `char` | 4 | 5 | 80% | sapper |
 | `boss` | 4 | 4 | 100% | none |

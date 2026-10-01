@@ -407,7 +407,7 @@ counter, so the rank and the number next to it come from one source.
 ## 5. How far do runs get?
 
 A funnel over states the reference dimension documents. A renamed state would
-show up in `reference_history` before it broke this chart.
+show up in `app_state_history` before it broke this chart.
 
 ```sql echo id=funnel
 SELECT step, step_seq, runs

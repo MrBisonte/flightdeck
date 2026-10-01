@@ -30,12 +30,12 @@ without needing a note.
 
 `empty` is a separate column from `verdict`, on purpose. A count that disagrees
 is always a defect. A relation with no rows is a property of the input. One
-capture holds no alarm and no error, so six relations land empty while every
+capture holds no alarm and no error, so nine relations land empty while every
 count still agrees.
 
 ## Both inputs
 
-`./demo.sh build` reads the three committed captures. `./demo.sh --live DIR`
+`./demo.sh build` reads the four committed captures. `./demo.sh --live DIR`
 reads the newest capture in `DIR`, through the sanitizer. The second path has
 its own defects in the log, so it earns its own evidence.
 
@@ -45,6 +45,7 @@ replaces the warehouse the site reads:
 ```
 mkdir -p /tmp/livecheck && cd /tmp/livecheck
 cp -r <repo>/{pipeline,contracts,scripts,fixtures,tests,docs} . && cp <repo>/{demo.sh,README.md,docker-compose.yml} .
+mkdir -p site && cp -r <repo>/site/src site/
 mkdir -p warehouse captures && cp <repo>/fixtures/raw/*.jsonl captures/
 bash ./demo.sh --live captures all
 python scripts/qa_evidence.py --out docs/qa/e2e-evidence-live.csv --raw-glob warehouse/live/<the capture demo.sh picked>
@@ -56,14 +57,14 @@ relation reports the capture.
 
 The two runs agree where they should and differ where the input differs:
 
-| Relation | Fixtures, 3 captures | Live, newest capture |
+| Relation | Fixtures, 4 captures | Live, newest capture |
 |---|---|---|
-| `landed` | 1260 | 338 |
-| `clean` | 1259 | 337 |
-| `quarantine` | 1 | 1 |
-| `sessions` | 16 | 4 |
-| `spans` | 4002 | 1068 |
-| `fact_run` | 6 | 2 |
+| `landed` | 1546 | 286 |
+| `clean` | 1545 | 286 |
+| `quarantine` | 1 | 0 |
+| `sessions` | 17 | 1 |
+| `spans` | 5712 | 1710 |
+| `fact_run` | 8 | 2 |
 | `dim_member` | 9 | 9 |
 | `alarms`, `errors` | 4, 2 | 0, 0 |
 

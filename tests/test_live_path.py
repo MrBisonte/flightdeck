@@ -59,8 +59,10 @@ def capture(first_srv: int, beats: int, origin: str, cid: str) -> list[dict]:
     """One page load served from ``origin``.
 
     The unlisted dev address rides along in four other fields, so a scrub that
-    names its fields still fails here. The page load's own origin is a separate
-    question, and every test below asks both.
+    names its fields still fails here. The page load's own origin also lands in
+    the error message, which publishes and has no column of its own to withhold
+    it. The page load's own origin is a separate question, and every test below
+    asks both.
     """
     srv = first_srv
     records = [{"kind": "hello", "cid": cid, "wall": srv,
@@ -78,7 +80,8 @@ def capture(first_srv: int, beats: int, origin: str, cid: str) -> list[dict]:
                         "events": events, "dropped": 0, "srv": srv})
     srv += 1000
     records.append({"kind": "err", "cid": cid, "wall": srv,
-                    "msg": "Uncaught TypeError: failed to load " + DEV_ORIGIN + "/src/game.ts",
+                    "msg": "Uncaught TypeError on " + origin + " while loading "
+                           + DEV_ORIGIN + "/src/game.ts",
                     "stack": "TypeError: x is undefined\n    at update ("
                              + DEV_ORIGIN + "/src/game.ts:67:30)",
                     "events": [], "srv": srv})
@@ -250,9 +253,19 @@ def test_the_published_build_keeps_its_origin_on_the_site(live_run):
 
 
 def test_no_published_file_carries_a_withheld_origin(live_run):
-    """The publish decision, checked on the bytes rather than on one column."""
-    carriers = [p.name for p in sorted((live_run / "warehouse" / "curated").glob("*.parquet"))
-                if DEV_PORT_ORIGIN.encode() in p.read_bytes()]
+    """The publish decision, checked on every value a reader can see rather than
+    on one column. The capture also puts the withheld origin in an error message,
+    which has no column of its own to withhold. Reading values and not bytes, so
+    a compressed page cannot hide a match."""
+    import duckdb
+
+    con = duckdb.connect()
+    carriers = [
+        p.name for p in sorted((live_run / "warehouse" / "curated").glob("*.parquet"))
+        if con.execute(
+            f"SELECT count(*) FROM read_parquet('{p.as_posix()}') AS t "
+            "WHERE contains(CAST(t AS VARCHAR), ?)", [DEV_PORT_ORIGIN]).fetchone()[0]
+    ]
     assert carriers == []
 
 

@@ -25,7 +25,7 @@ An origin takes one of two routes. This directory takes the first.
 | Route | Flag | What happens to an origin |
 |---|---|---|
 | Fixture scrub | none | Every origin becomes `http://localhost` |
-| Live capture | `--live` | A listed origin survives. Every other one loses its host |
+| Live capture | `--live` | In `href`, a listed origin survives. Elsewhere, only an origin that may publish survives. Every other one loses its host |
 
 The files here sit in a public repository, so they are already published. They
 carry no origin at all, whatever the reference says.

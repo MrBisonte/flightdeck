@@ -1,5 +1,5 @@
-boss,note
-crowking,first boss
-dark_archer,castle boss
-dark_knight,castle boss
-minotaur,labyrinth warden
+boss,note,valid_from,valid_to
+crowking,first boss,2026-08-17T21:07:20Z,
+dark_archer,castle boss,2026-08-17T21:07:20Z,
+dark_knight,castle boss,2026-08-17T21:07:20Z,
+minotaur,labyrinth warden,2026-08-22T12:19:46Z,
