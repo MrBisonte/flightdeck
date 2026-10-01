@@ -6,6 +6,7 @@ repeated as constants in pipeline/10_typed.sql. Three copies of the same fact
 is two chances to drift, so these tests pin them together.
 """
 import csv
+import json
 import pathlib
 import re
 
@@ -99,6 +100,52 @@ def test_caps_are_a_table_not_session_variables():
     read NULL and every cap check would silently pass."""
     assert "CREATE OR REPLACE TABLE contract_caps" in TYPED_SQL
     assert "SET variable cap_" not in TYPED_SQL
+
+
+def numeric_wire_fields() -> set[str]:
+    """Every numeric leaf in wire_schema.jsonl, as the units block names it.
+
+    A list element is written `[]` and a frame section under trace.spans is
+    written `*`. bool is a subclass of int in Python, so it is excluded first.
+    """
+    found: set[str] = set()
+
+    def walk(value, path: str) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                section = path == "trace.spans"
+                walk(child, f"{path}.{'*' if section else key}" if path else key)
+        elif isinstance(value, list):
+            for child in value:
+                walk(child, f"{path}[]")
+        elif isinstance(value, (int, float)) and not isinstance(value, bool):
+            found.add(path)
+
+    schema = ROOT / "contracts" / "wire_schema.jsonl"
+    for line in schema.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            walk(json.loads(line), "")
+    return found
+
+
+def test_every_numeric_wire_field_has_a_unit():
+    """The wire sends bare numbers. A field with no unit in the contract is a
+    number nobody can read safely."""
+    missing = numeric_wire_fields() - set(CONTRACT["units"])
+    assert not missing, sorted(missing)
+
+
+def test_every_unit_entry_names_a_real_field():
+    """A unit for a field the wire never sends is a stale entry."""
+    stale = set(CONTRACT["units"]) - numeric_wire_fields()
+    assert not stale, sorted(stale)
+
+
+def test_every_unit_is_defined():
+    kinds = set(CONTRACT["unit_kinds"])
+    for field, entry in CONTRACT["units"].items():
+        assert entry["unit"] in kinds, field
+        assert entry["source"].startswith("src/"), field
 
 
 def test_alarm_classes_in_sql_match_the_contract():

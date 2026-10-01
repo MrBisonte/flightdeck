@@ -150,20 +150,23 @@ same data, so a wider range is possible in production.
 
 ### 3.2 Columns, by unit family
 
-The database carries no unit metadata. The units below come from the source
-named in the last column.
+The database carries no unit metadata. The `units` block of
+`contracts/flight_log.yml` records the unit of every numeric wire field, with the
+crow-archer file that sets it. `tests/test_contract.py` fails when a field has
+none. The table below groups the warehouse columns by that unit.
 
 | Unit | Columns | Type | Observed range | Source |
 |---|---|---|---|---|
-| Epoch milliseconds | `srv`, `wall`, `hello_srv`, `hello_wall`, `bye_srv`, `last_srv`, `prev_srv`, `drained_srv`, `events.timestamp` | BIGINT | 1788101912791 to 1788122382071 | Inferred. `srv / 1000` reads as 2026-08-30 22:39 UTC |
-| Milliseconds since page load | `perf` | BIGINT | 1072 to 17424492 | Inferred from magnitude |
-| Milliseconds | `spans.ms`, `spans.ms_max` | DOUBLE | 0.0025 to 6.1 | `20_curated.sql` names them |
+| Epoch milliseconds | `srv`, `wall`, `hello_srv`, `hello_wall`, `bye_srv`, `last_srv`, `prev_srv`, `drained_srv`, `events.timestamp` | BIGINT | 1788101912791 to 1788122382071 | Contract `units`. `srv / 1000` reads as 2026-08-30 22:39 UTC |
+| Milliseconds since page load | `perf`, `pulses.lastTs` | BIGINT | `perf` 1072 to 17424492 | Contract `units` |
+| Milliseconds | `spans.ms`, `spans.ms_max` | DOUBLE | 0.0025 to 6.1 | Contract `units` |
+| Seconds of simulation time | `pulses.t`, `blockers.frozen`, `blockers.dashing` | mixed | not measured | Contract `units` |
 | Seconds | `duration_s`, `gap_s`, `s_since_previous` | DOUBLE | 0.0 to 17424.0 | The suffix, and a division by 1000 in the SQL |
-| Count | `beats`, `alarms`, `errors`, `event_count`, `trace_frames`, `spans.frames`, `held_key_count`, `hp`, `kills`, `crows`, `skels`, `soldiers`, `arrows` | BIGINT | see 3.3 | Inferred |
+| Pixels | `blockers.x`, `blockers.y` | BIGINT | not measured | Contract `units` |
+| Count | `beats`, `alarms`, `errors`, `event_count`, `trace_frames`, `spans.frames`, `held_key_count`, `hp`, `kills`, `crows`, `skels`, `soldiers`, `arrows`, `pulses.held`, `beats.raf` | BIGINT | see 3.3 | Contract `units` for wire fields, the SQL for the rest |
 | Ordinal | `page_load_seq` | INTEGER | 1 to 6 | Contract invariant `page_load_opens_with_hello` |
 | Ordinal | `events.id`, `spans.event_id` | BIGINT | 1 to 845 | Restarts at 1 on each page load |
 | Ratio | `dpr` | BIGINT | 1 to 1 | Device pixel ratio |
-| Unknown | `pulses.t`, `pulses.lastTs`, `pulses.held`, `blockers.frozen`, `blockers.dashing`, `blockers.x`, `blockers.y`, `beats.raf` | mixed | see 3.4 | No source |
 
 ### 3.3 Caps and observed maxima
 
@@ -592,10 +595,10 @@ still add up. That is the point of the quarantine relation.
 |---|---|---|---|
 | 1 | `spans` had no primary key. It carries `event_id` now, and `tests/test_gold.py` pins the key | pipeline | Closed |
 | 2 | `logger_ring_capacity` and `sink_body_bytes` never reached `contract_caps`. Commit `25f3e85` carries all five caps, and `tests/test_contract.py` takes its cases from the YAML | pipeline | Closed |
-| 3 | `contracts/flight_log.yml` records no units. Add a `columns:` block | contract | Open, needs approval |
-| 4 | `beats.raf` has an undocumented origin and disagrees with `perf` | crow-archer | Open, external |
-| 5 | `pulses.t`, `pulses.lastTs` and `pulses.held` have no documented unit | crow-archer | Open, external |
-| 6 | `blockers.frozen`, `blockers.dashing`, `blockers.x` and `blockers.y` have no documented unit | crow-archer | Open, external |
+| 3 | `contracts/flight_log.yml` recorded no units. Its `units` block now covers every numeric wire field, and a test fails on a field without one | contract | Closed |
+| 4 | `beats.raf` disagreed with `perf`. The recorder source shows `raf` counts animation frames, and `perf` reads a clock in milliseconds | crow-archer | Closed |
+| 5 | `pulses.t`, `pulses.lastTs` and `pulses.held` had no documented unit. The `Pulse` type in the recorder documents all three | crow-archer | Closed |
+| 6 | `blockers.frozen`, `blockers.dashing`, `blockers.x` and `blockers.y` have no documented unit. The contract reads them from the game code: two timers that count down by `dt`, and the player position. crow-archer documents none of the four | crow-archer | Open, external |
 | 7 | `blockers.frozen` and `blockers.dashing` read 0 in every fixture row | fixtures | Open, no evidence |
 | 8 | Observed ranges come from 3 sessions. A wider range is likely | fixtures | Accepted |
 | 9 | `dim_app_state` was Type 1, so reclassifying `is_run_state` rewrote `fact_run.sim_active_s` for every past run. It is Type 2 now, and `run_pulse` joins the version in force when each pulse arrived. ADR 0004 | pipeline | Closed |
