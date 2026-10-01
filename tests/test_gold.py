@@ -55,6 +55,18 @@ def one(con, sql):
 # --------------------------------------------------------------------------
 # Grain
 # --------------------------------------------------------------------------
+def test_spans_is_unique_on_its_key():
+    """One beat can drain two trace summaries. Without event_id in the key, the
+    sections of the two land on the same row key and nothing tells them apart."""
+    path = (ROOT / "warehouse" / "curated" / "spans.parquet").as_posix()
+    rows, distinct = duckdb.connect().execute(f"""
+        SELECT count(*),
+               count(DISTINCT (session_id, page_load_seq, srv, origin, event_id, span))
+        FROM read_parquet('{path}')
+    """).fetchone()
+    assert rows == distinct
+
+
 def test_run_id_is_unique(con):
     rows, distinct = one(con, "SELECT count(*), count(DISTINCT run_id) FROM fact_run")
     assert rows == distinct
