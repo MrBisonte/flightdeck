@@ -173,12 +173,12 @@ named in the last column.
 | `alarms.trace_frames` | 120 | `contract_caps` | 120 |
 | `spans.frames` | 120 | `contract_caps` | 120 |
 | events per `bye` | 100 | `contract_caps` | 1 |
-| logger ring capacity | 500 | `flight_log.yml` only | not measurable |
-| HTTP body bytes | 1000000 | `flight_log.yml` only | not measurable |
+| logger ring capacity | 500 | `contract_caps` | not measurable |
+| HTTP body bytes | 1000000 | `contract_caps` | not measurable |
 
-> **Warning.** `contract_caps` holds three of the five caps that
-> `contracts/flight_log.yml` declares. `logger_ring_capacity` and
-> `sink_body_bytes` never reach the database. No query can check them.
+> **Note.** `contract_caps` holds all five caps that `contracts/flight_log.yml`
+> declares. No column records the ring's occupancy or the size of a body, so no
+> query can test the last two against data.
 
 ### 3.4 Observed maximum length, VARCHAR columns
 
@@ -591,7 +591,7 @@ still add up. That is the point of the quarantine relation.
 | ID | Question or risk | Owner | Status |
 |---|---|---|---|
 | 1 | `spans` has no primary key. Add the source event id to the beat_trace branch | pipeline | Open, needs approval |
-| 2 | `logger_ring_capacity` and `sink_body_bytes` never reach `contract_caps` | pipeline | Open, needs approval |
+| 2 | `logger_ring_capacity` and `sink_body_bytes` never reached `contract_caps`. Commit `536d4d1` carries all five caps, and `tests/test_contract.py` takes its cases from the YAML | pipeline | Closed |
 | 3 | `contracts/flight_log.yml` records no units. Add a `columns:` block | contract | Open, needs approval |
 | 4 | `beats.raf` has an undocumented origin and disagrees with `perf` | crow-archer | Open, external |
 | 5 | `pulses.t`, `pulses.lastTs` and `pulses.held` have no documented unit | crow-archer | Open, external |
