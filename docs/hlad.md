@@ -161,7 +161,7 @@ named in the last column.
 | Seconds | `duration_s`, `gap_s`, `s_since_previous` | DOUBLE | 0.0 to 17424.0 | The suffix, and a division by 1000 in the SQL |
 | Count | `beats`, `alarms`, `errors`, `event_count`, `trace_frames`, `spans.frames`, `held_key_count`, `hp`, `kills`, `crows`, `skels`, `soldiers`, `arrows` | BIGINT | see 3.3 | Inferred |
 | Ordinal | `page_load_seq` | INTEGER | 1 to 6 | Contract invariant `page_load_opens_with_hello` |
-| Ordinal | `events.id` | BIGINT | 1 to 845 | Restarts at 1 on each page load |
+| Ordinal | `events.id`, `spans.event_id` | BIGINT | 1 to 845 | Restarts at 1 on each page load |
 | Ratio | `dpr` | BIGINT | 1 to 1 | Device pixel ratio |
 | Unknown | `pulses.t`, `pulses.lastTs`, `pulses.held`, `blockers.frozen`, `blockers.dashing`, `blockers.x`, `blockers.y`, `beats.raf` | mixed | see 3.4 | No source |
 
@@ -379,6 +379,7 @@ erDiagram
         bigint srv "epoch ms"
         varchar client_id FK
         varchar origin "alarm_trace or beat_trace"
+        bigint event_id "events.id, NULL on alarm rows"
         varchar span "enum, 6, in run order"
         double ms "milliseconds, mean"
         double ms_max "milliseconds, worst frame"
@@ -415,13 +416,12 @@ Each candidate key below ran a `count(*)` against a `count(DISTINCT ...)`.
 | `alarms` | `session_id`, `page_load_seq`, `srv` | 4 | 4 | yes |
 | `blockers` | `session_id`, `page_load_seq`, `srv` | 4 | 4 | yes |
 | `errors` | `session_id`, `page_load_seq`, `srv` | 2 | 2 | yes |
-| `spans` | `session_id`, `page_load_seq`, `srv`, `span`, `origin` | 5712 | 5694 | **no** |
+| `spans` | `session_id`, `page_load_seq`, `srv`, `origin`, `event_id`, `span` | 5712 | 5712 | yes |
 
-> **Warning.** `spans` has no primary key. One beat can drain two trace
-> summaries. Three beats did, so 18 rows collide. At `srv = 1788102057802` the
-> `hud` section appears twice, with `ms_max` 0.4 and 0.2. The two rows describe
-> different frame windows. Event ids 24 and 25 tell them apart, and `spans`
-> carries neither. Section 6 tracks the fix.
+> **Note.** One beat can drain two trace summaries, and three beats did. At
+> `srv = 1788102057802` the `hud` section appears twice, with `ms_max` 0.4 and
+> 0.2, from events 24 and 25. `event_id` keeps the two apart. An alarm carries
+> one trace and no event, so its rows leave `event_id` NULL and `srv` keys them.
 
 ### 4.3 Slowly changing dimensions
 
@@ -590,7 +590,7 @@ still add up. That is the point of the quarantine relation.
 
 | ID | Question or risk | Owner | Status |
 |---|---|---|---|
-| 1 | `spans` has no primary key. Add the source event id to the beat_trace branch | pipeline | Open, needs approval |
+| 1 | `spans` had no primary key. It carries `event_id` now, and `tests/test_gold.py` pins the key | pipeline | Closed |
 | 2 | `logger_ring_capacity` and `sink_body_bytes` never reached `contract_caps`. Commit `536d4d1` carries all five caps, and `tests/test_contract.py` takes its cases from the YAML | pipeline | Closed |
 | 3 | `contracts/flight_log.yml` records no units. Add a `columns:` block | contract | Open, needs approval |
 | 4 | `beats.raf` has an undocumented origin and disagrees with `perf` | crow-archer | Open, external |

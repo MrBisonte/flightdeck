@@ -293,8 +293,13 @@ FROM clean WHERE kind = 'err';
 -- summary survives in the beat drain as formatted text. Parsing it is what makes
 -- a real distribution possible: 663 summaries, six sections each.
 --------------------------------------------------------------------------------
+-- event_id keys a beat_trace row. One beat can drain two trace summaries, and
+-- only the id of the event that carried each one tells them apart. An alarm
+-- carries one trace and no event, so its rows leave event_id NULL and srv keys
+-- them. The key is session_id, page_load_seq, srv, origin, event_id, span.
 CREATE OR REPLACE TABLE spans AS
 SELECT session_id, page_load_seq, client_id, srv, 'alarm_trace' AS origin,
+       CAST(NULL AS BIGINT) AS event_id,
        s.name AS span, s.ms, s.ms_max, frames
 FROM (
     SELECT session_id, page_load_seq, client_id, srv, trace.frames AS frames,
@@ -310,20 +315,20 @@ FROM (
 )
 UNION ALL
 SELECT session_id, page_load_seq, client_id, srv, 'beat_trace' AS origin,
-       p.span, CAST(p.ms AS DOUBLE), CAST(p.ms_max AS DOUBLE), frames
+       event_id, p.span, CAST(p.ms AS DOUBLE), CAST(p.ms_max AS DOUBLE), frames
 FROM (
-    SELECT session_id, page_load_seq, client_id, srv, frames,
+    SELECT session_id, page_load_seq, client_id, srv, event_id, frames,
            regexp_extract(
                row_text,
                '^(\w+)\s+([0-9.]+)ms\s+max\s+([0-9.]+)\s+(\d+) fill\s+(\d+) img\s+([0-9.]+)Mpx',
                ['span', 'ms', 'ms_max', 'fill', 'img', 'mpx']
            ) AS p
     FROM (
-        SELECT session_id, page_load_seq, client_id, srv,
+        SELECT session_id, page_load_seq, client_id, srv, event_id,
                CAST(regexp_extract(message, '^(\d+) frames', 1) AS INTEGER) AS frames,
                unnest(from_json(row_json, '["VARCHAR"]')) AS row_text
         FROM (
-            SELECT session_id, page_load_seq, client_id, srv,
+            SELECT session_id, page_load_seq, client_id, srv, e.id AS event_id,
                    e.message AS message, e.data['rows'] AS row_json
             FROM (
                 SELECT session_id, page_load_seq, client_id, srv, unnest(events) AS e
