@@ -17,18 +17,22 @@ CREATE OR REPLACE VIEW raw AS
 SELECT * FROM read_parquet('warehouse/raw/**/*.parquet', hive_partitioning = true);
 
 -- Reference dimensions, the second source. Documented domain, not observed values.
-CREATE OR REPLACE VIEW ref_states AS SELECT * FROM read_csv('fixtures/reference/app_states.csv');
 CREATE OR REPLACE VIEW ref_modes  AS SELECT * FROM read_csv('fixtures/reference/modes.csv');
--- characters.csv and boss_kinds.csv hold one row per version, each with the
--- dates it was valid in the game. The _versions views carry every row for
--- 22_gold.sql. ref_chars and ref_bosses keep the shape every check here reads:
--- one row per member, its version still in force.
+-- app_states.csv, characters.csv and boss_kinds.csv hold one row per version,
+-- each with the dates it was valid in the game. The _versions views carry every
+-- row for 22_gold.sql. ref_states, ref_chars and ref_bosses keep the shape every
+-- check here reads: one row per member, its version still in force.
+CREATE OR REPLACE VIEW ref_state_versions AS
+SELECT * FROM read_csv('fixtures/reference/app_states.csv',
+                       types = {'valid_from': 'TIMESTAMPTZ', 'valid_to': 'TIMESTAMPTZ'});
 CREATE OR REPLACE VIEW ref_char_versions AS
 SELECT * FROM read_csv('fixtures/reference/characters.csv',
                        types = {'valid_from': 'TIMESTAMPTZ', 'valid_to': 'TIMESTAMPTZ'});
 CREATE OR REPLACE VIEW ref_boss_versions AS
 SELECT * FROM read_csv('fixtures/reference/boss_kinds.csv',
                        types = {'valid_from': 'TIMESTAMPTZ', 'valid_to': 'TIMESTAMPTZ'});
+CREATE OR REPLACE VIEW ref_states AS
+SELECT state, is_run_state, in_run, note FROM ref_state_versions WHERE valid_to IS NULL;
 CREATE OR REPLACE VIEW ref_chars  AS SELECT "char", note FROM ref_char_versions WHERE valid_to IS NULL;
 CREATE OR REPLACE VIEW ref_bosses AS SELECT boss, note   FROM ref_boss_versions WHERE valid_to IS NULL;
 -- The known request origins. Not from the playbook: this one describes where

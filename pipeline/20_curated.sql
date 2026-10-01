@@ -203,7 +203,7 @@ SELECT 'boss', (SELECT count(*) FROM ref_bosses),
 -- Errors, with the frame that raised them.
 --------------------------------------------------------------------------------
 CREATE OR REPLACE VIEW error_report AS
-SELECT session_id, page_load_seq, to_timestamp(srv / 1000.0) AS arrived,
+SELECT session_id, page_load_seq, srv_time(srv) AS arrived,
        msg, top_frame, top_location
 FROM errors ORDER BY srv;
 
@@ -249,7 +249,7 @@ WITH incidents AS (
 )
 SELECT session_id,
        page_load_seq,
-       to_timestamp(srv / 1000.0) AS occurred_at,
+       srv_time(srv) AS occurred_at,
        event,
        detail,
        round((srv - lag(srv) OVER (PARTITION BY session_id ORDER BY srv)) / 1000.0, 3)
