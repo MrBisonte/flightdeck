@@ -64,8 +64,8 @@ runs in CI on every commit, so a broken contract fails the build.
 
 ## 2. How fresh is this?
 
-Two clocks, and they are not the same. One says when the site was built. One
-says when the data last arrived. `srv` is the arrival time, stamped by the
+The page shows two times: when the site was built and when the data last
+arrived. `srv` is the arrival time, stamped by the
 server, so the page cannot write it.
 
 ```sql echo id=manifest

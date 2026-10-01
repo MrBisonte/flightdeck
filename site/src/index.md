@@ -9,7 +9,7 @@ sql:
 A [browser game](https://mrbisonte.github.io/crow-archer/) keeps a flight log while you play. This project reads that log,
 checks it against a written contract, and publishes the result as open Parquet.
 
-Reading the log is not the hard part. Trusting it is.
+Most of the work is not reading the log but deciding which of its timestamps to trust.
 
 ```
    the page says when it happened   -->   a claim
@@ -88,9 +88,9 @@ flowchart LR
 The sink adds the arrival time as it writes. The pipeline calls that column
 `srv`, and it is the server clock in the two lines further up this page.
 
-The sample on this site came from the dev sink. The published game posts to the
-Fly sink only when you open it with `?rec=1`, so a passer by records nothing.
-No capture from there has reached this pipeline yet.
+The sample on this site came from the dev sink and from the published game. The
+published game posts to the Fly sink only when you open it with `?rec=1`, so a
+passer by records nothing.
 
 ## What is on this site
 
@@ -107,6 +107,6 @@ No capture from there has reached this pipeline yet.
 This is a demonstration of the method, not a large study. The sample is small,
 and the Overview page prints how small, from a query over the published Parquet.
 
-A number the pipeline does not publish is a number this site cannot show. A page
+The site can only show numbers the pipeline publishes. A page
 reads that Parquet and may count and rank what it holds, but it adds no source
 of its own.

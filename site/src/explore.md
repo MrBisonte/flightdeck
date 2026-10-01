@@ -68,8 +68,8 @@ display(Inputs.table(catalog, {rows: 12}));
 
 ## The query box
 
-Type SQL, then press Run. A mistake costs nothing: the error appears where the
-result would, and the page stays live.
+Type SQL, then press Run. If a query fails, the page shows the error in place
+of the result and keeps working.
 
 ```js
 const query = view(Inputs.textarea({

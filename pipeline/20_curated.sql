@@ -127,13 +127,13 @@ SELECT session_id, page_load_seq, prev_srv, srv,
 FROM ordered
 WHERE prev_srv IS NOT NULL AND srv - prev_srv > 3000;   -- 3x the 1s beat interval
 
--- Why each gap happened. A hidden tab has its 1s timer clamped by the browser,
--- which is expected. A gap while the tab was visible is not explained by
+-- Why each gap happened. In a hidden tab the browser limits the 1s timer to
+-- about once a minute, which is expected. A gap while the tab was visible is not explained by
 -- throttling and is the one worth looking at.
 CREATE OR REPLACE VIEW gap_explained AS
 SELECT CASE
            WHEN prev_vis = 'hidden' AND vis = 'hidden' AND gap_s BETWEEN 30 AND 70
-               THEN 'background tab, timer clamped to ~60s'
+               THEN 'hidden tab, browser limited the timer to once a minute'
            WHEN prev_vis = 'hidden' OR vis = 'hidden'
                THEN 'tab hidden, machine likely asleep'
            ELSE 'VISIBLE THROUGHOUT, not explained by throttling'
