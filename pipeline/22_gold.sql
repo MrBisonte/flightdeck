@@ -27,11 +27,11 @@
 -- A dimension whose value decided something keeps its history. A quarantine
 -- decision taken under events_per_beat = 400 cannot be reproduced once that
 -- number moves, and a run labelled "archer, fast glass cannon" cannot be read
--- back once the playbook rewrites that line. Those are Type 2.
+-- back once the playbook rewrites that line. A run's play time is the sum of
+-- the pulses whose state advances the clock, so reclassifying a state would
+-- rewrite every past run. Those are Type 2.
 --
--- app_states and modes are rebuilt from source, Type 1. Nothing published names
--- a mode, and app_states carries two flags rather than a description, so it
--- needs its own table and its own decision. Both are noted in docs/hlad.md.
+-- modes are rebuilt from source, Type 1. Nothing published names a mode.
 --
 -- valid_from here is valid time: when the value became true in its own source,
 -- declared in the file that holds it. A member dates from the first crow-archer
@@ -46,8 +46,41 @@
 CREATE OR REPLACE TABLE dim_mode AS
 SELECT mode AS mode_key, note AS description FROM ref_modes;
 
+--------------------------------------------------------------------------------
+-- dim_app_state. Type 2, and the one dimension a fact joins as-of.
+--
+-- is_run_state is arithmetic, not description: fact_run.sim_active_s sums the
+-- pulses it flags. run_pulse below joins the version in force when each pulse
+-- arrived, so a state reclassified from a later date changes the runs after
+-- that date and leaves every earlier run as it was.
+--------------------------------------------------------------------------------
 CREATE OR REPLACE TABLE dim_app_state AS
-SELECT state AS state_key, is_run_state, in_run, note AS description FROM ref_states;
+SELECT state AS state_key,
+       is_run_state,
+       in_run,
+       note AS description,
+       CAST(row_number() OVER (PARTITION BY state ORDER BY valid_from) AS INTEGER)
+            AS version_seq,
+       valid_from,
+       valid_to,
+       valid_to IS NULL AS is_current
+FROM ref_state_versions;
+
+-- Its own file rather than rows in reference_history, because a state carries
+-- two flags and a member carries a description. Folding them together would
+-- hide a change to a flag behind an unchanged description.
+CREATE OR REPLACE VIEW app_state_history AS
+SELECT state_key,
+       version_seq,
+       is_run_state,
+       in_run,
+       description,
+       valid_from,
+       valid_to,
+       is_current,
+       CASE WHEN is_current THEN 'in force' ELSE 'superseded' END AS status
+FROM dim_app_state
+ORDER BY state_key, version_seq;
 
 --------------------------------------------------------------------------------
 -- dim_member. Type 2, every versioned reference member in one table.
@@ -145,6 +178,9 @@ WITH versioned AS (
     SELECT dimension, member_key, version_seq, valid_from, is_current
     FROM dim_member
     UNION ALL
+    SELECT 'app state', state_key, version_seq, valid_from, is_current
+    FROM dim_app_state
+    UNION ALL
     SELECT 'contract cap', cap_key, version_seq, valid_from, is_current
     FROM dim_contract_cap
 ),
@@ -204,7 +240,12 @@ WITH labelled AS (
            -- same page load. The last pulse of a page load covers nothing.
            coalesce(lead(p.srv) OVER w - p.srv, 0) / 1000.0 AS held_s
     FROM pulses p
-    JOIN dim_app_state d ON d.state_key = p.state
+    -- The version in force when the pulse arrived. Every state predates every
+    -- pulse, and tests/test_versioned_dimensions.py fails if one does not.
+    JOIN dim_app_state d
+      ON d.state_key = p.state
+     AND srv_time(p.srv) >= d.valid_from
+     AND srv_time(p.srv) <  coalesce(d.valid_to, 'infinity'::TIMESTAMPTZ)
     WINDOW w AS (PARTITION BY p.session_id, p.page_load_seq ORDER BY p.srv)
 ),
 numbered AS (
@@ -535,7 +576,7 @@ SELECT run_id,
 FROM fact_run;
 
 -- How far each run got, as a funnel over states the reference dimension
--- documents. A renamed state shows up in reference_history before it breaks
+-- documents. A renamed state shows up in app_state_history before it breaks
 -- this chart.
 CREATE OR REPLACE VIEW run_funnel AS
 SELECT 'started a run'             AS step, 1 AS step_seq, CAST(count(DISTINCT run_id) AS INTEGER) AS runs FROM run_pulse

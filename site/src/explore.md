@@ -2,6 +2,7 @@
 title: Explore
 sql:
   alarms_by_class: ./data/curated/alarms_by_class.parquet
+  app_state_history: ./data/curated/app_state_history.parquet
   boss_encounters_by_kind: ./data/curated/boss_encounters_by_kind.parquet
   character_usage: ./data/curated/character_usage.parquet
   clock_skew: ./data/curated/clock_skew.parquet

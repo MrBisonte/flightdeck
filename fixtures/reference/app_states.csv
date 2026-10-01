@@ -1,16 +1,16 @@
-state,is_run_state,in_run,note
-menu,false,false,title screen
-charselect,false,false,character picker
-mapselect,false,false,map picker
-controls,false,false,controls screen
-playing,true,true,sim clock advances
-stage_intro,false,true,between stages
-boss_entrance,false,true,boss cutscene
-boss_fight,true,true,sim clock advances
-paused,false,true,pause overlay
-chooser,false,true,in-run choice
-inventory,false,true,inventory screen
-talents,false,true,talent tree
-gameover,false,false,run ended
-win,false,false,run won
-multiplayer,false,false,multiplayer screen
+state,is_run_state,in_run,note,valid_from,valid_to
+menu,false,false,title screen,2026-07-19T22:24:09Z,
+charselect,false,false,character picker,2026-07-19T22:24:09Z,
+mapselect,false,false,map picker,2026-08-22T22:35:28Z,
+controls,false,false,controls screen,2026-07-19T22:24:09Z,
+playing,true,true,sim clock advances,2026-07-19T22:24:09Z,
+stage_intro,false,true,between stages,2026-08-22T12:19:46Z,
+boss_entrance,false,true,boss cutscene,2026-07-19T22:24:09Z,
+boss_fight,true,true,sim clock advances,2026-07-19T22:24:09Z,
+paused,false,true,pause overlay,2026-07-19T22:24:09Z,
+chooser,false,true,in-run choice,2026-08-28T20:52:20Z,
+inventory,false,true,inventory screen,2026-07-19T22:24:09Z,
+talents,false,true,talent tree,2026-08-28T20:52:20Z,
+gameover,false,false,run ended,2026-07-19T22:24:09Z,
+win,false,false,run won,2026-07-19T22:24:09Z,
+multiplayer,false,false,multiplayer screen,2026-08-15T14:13:28Z,

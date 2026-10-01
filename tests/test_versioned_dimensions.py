@@ -1,13 +1,15 @@
-"""Type 2 versioning on dim_character and dim_boss, from declared dates.
+"""Type 2 versioning on the reference dimensions, from declared dates.
 
-characters.csv and boss_kinds.csv hold one row per version, and each row
-declares the dates it was valid. The committed files only carry first versions,
-so this module writes a longer history into a copy of the tree and asserts what
-the dimension builds from it:
+app_states.csv, characters.csv and boss_kinds.csv hold one row per version, and
+each row declares the dates it was valid. The committed files only carry first
+versions, so this module writes a longer history into a copy of the tree and
+asserts what the dimensions build from it:
 
   - archer gains a second version, which opens on the date the first one closes
   - minotaur is withdrawn, so its only version closes and nothing opens
   - paladin joins, which opens a first version
+  - talents starts to advance the clock. Dated after every fact, that changes no
+    run. Dated before them, it changes the runs that spent time in it
 
 Two more properties come from the dates living in committed files rather than in
 the database. A rebuild from an empty warehouse, which is what every Pages
@@ -34,7 +36,7 @@ REFERENCE = ROOT / "fixtures" / "reference"
 NEEDED = ("pipeline", "contracts", "scripts", "fixtures", "demo.sh")
 
 #: The versioned reference files and the column that keys each one.
-VERSIONED = {"characters.csv": "char", "boss_kinds.csv": "boss"}
+VERSIONED = {"app_states.csv": "state", "characters.csv": "char", "boss_kinds.csv": "boss"}
 
 #: The earliest fact in the fixtures. Every first version must start before it,
 #: or an as-of join from that fact finds nothing.
@@ -110,6 +112,27 @@ CAPS = (
     "SELECT cap_key, cap_value, epoch_ms(valid_from), epoch_ms(valid_to), is_current "
     "FROM dim_contract_cap ORDER BY cap_key, valid_from"
 )
+STATES = (
+    "SELECT state_key, version_seq, is_run_state, in_run, "
+    "       epoch_ms(valid_from), epoch_ms(valid_to), is_current "
+    "FROM dim_app_state ORDER BY state_key, version_seq"
+)
+PLAY_TIME = "SELECT run_id, sim_active_s FROM fact_run ORDER BY run_id"
+
+#: talents as committed, and as it reads once it advances the clock.
+TALENTS = "talents,false,true,talent tree,2026-08-28T20:52:20Z,"
+
+
+def reclassify_talents(work: pathlib.Path, on: str) -> None:
+    """Close the committed version of talents on `on` and open one that
+    advances the simulation clock from the same instant."""
+    states = work / "fixtures" / "reference" / "app_states.csv"
+    text = states.read_text(encoding="utf-8")
+    assert TALENTS in text, text
+    states.write_text(
+        text.replace(TALENTS, TALENTS + on) + f"talents,true,true,talent tree,{on},\n",
+        encoding="utf-8",
+    )
 
 
 @pytest.fixture(scope="module")
@@ -121,9 +144,19 @@ def tools():
 
 
 @pytest.fixture(scope="module")
+def baseline(tools, tmp_path_factory):
+    """The committed tree, built from an empty warehouse."""
+    work = copy_tree(tmp_path_factory.mktemp("baseline"))
+    run(work, "build")
+    return work
+
+
+@pytest.fixture(scope="module")
 def versioned(tools, tmp_path_factory):
-    """Declare a second history in a copy of the tree, then build it."""
+    """Declare a second history in a copy of the tree, then build it. Every
+    date here falls after the last fact in the fixtures."""
     work = copy_tree(tmp_path_factory.mktemp("versioned"))
+    reclassify_talents(work, "2026-09-30T00:00:00Z")
 
     chars = work / "fixtures" / "reference" / "characters.csv"
     text = chars.read_text(encoding="utf-8")
@@ -211,15 +244,52 @@ def test_a_withdrawn_member_leaves_the_checked_domain(versioned, monkeypatch):
     assert len(bosses) == 3
 
 
-def test_a_rebuild_from_nothing_reproduces_the_history(tools, tmp_path_factory):
+def test_a_rebuild_from_nothing_reproduces_the_history(baseline, tmp_path_factory):
     """The Pages deploy starts from an empty warehouse every time. Two such
     builds must agree on every version and every date."""
-    builds = []
-    for name in ("first", "second"):
-        work = copy_tree(tmp_path_factory.mktemp(name))
-        run(work, "build")
-        builds.append((query(work, HISTORY), query(work, CAPS)))
+    again = copy_tree(tmp_path_factory.mktemp("again"))
+    run(again, "build")
+    builds = [tuple(query(work, sql) for sql in (HISTORY, CAPS, STATES))
+              for work in (baseline, again)]
     assert builds[0] == builds[1]
-    history, caps = builds[0]
+    history, caps, states = builds[0]
     assert len(history) == 9 and all(r[2] == 1 for r in history)
     assert len(caps) == 5
+    assert len(states) == 15 and all(r[1] == 1 for r in states)
+
+
+def test_every_pulse_finds_the_state_version_in_force(baseline):
+    """run_pulse joins dim_app_state as-of with an inner join, so a pulse whose
+    state had no version in force when it arrived would vanish from every run
+    without a trace. The typed layer already quarantines an unknown state, so
+    every pulse that reaches here must find exactly one version."""
+    lost, = query(baseline, """
+        SELECT count(*) FROM pulses p
+        WHERE (SELECT count(*) FROM dim_app_state d
+                WHERE d.state_key = p.state
+                  AND srv_time(p.srv) >= d.valid_from
+                  AND srv_time(p.srv) < coalesce(d.valid_to, 'infinity'::TIMESTAMPTZ)) <> 1
+    """)[0]
+    assert lost == 0
+
+
+def test_a_later_reclassification_leaves_every_run_alone(baseline, versioned):
+    """talents advances the clock from 2026-09-30, after the last fact, so no
+    run's play time moves. Under Type 1 every run with talents time would."""
+    assert query(versioned, PLAY_TIME) == query(baseline, PLAY_TIME)
+    talents = [r for r in query(versioned, STATES) if r[0] == "talents"]
+    assert [(r[1], r[2], r[6]) for r in talents] == [(1, False, False), (2, True, True)]
+
+
+def test_an_earlier_reclassification_changes_the_runs_after_it(baseline, tmp_path_factory):
+    """The same change dated before the first fact reaches every run, and only
+    raises play time. Without this the test above could pass on a join that
+    ignores versions altogether."""
+    early = copy_tree(tmp_path_factory.mktemp("early"))
+    reclassify_talents(early, "2026-08-29T00:00:00Z")
+    run(early, "build")
+    before = dict(query(baseline, PLAY_TIME))
+    after = dict(query(early, PLAY_TIME))
+    assert before.keys() == after.keys()
+    assert all(after[r] >= before[r] for r in before)
+    assert any(after[r] > before[r] for r in before)

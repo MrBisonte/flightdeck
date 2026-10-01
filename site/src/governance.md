@@ -4,6 +4,7 @@ sql:
   reference_governance: ./data/curated/reference_governance.parquet
   reference_history: ./data/curated/reference_history.parquet
   contract_cap_history: ./data/curated/contract_cap_history.parquet
+  app_state_history: ./data/curated/app_state_history.parquet
   dimension_coverage: ./data/curated/dimension_coverage.parquet
 ---
 
@@ -87,10 +88,9 @@ ORDER BY dimension
 display(Inputs.table(policy, {rows: 8, format: {first_valid_from: utc}, width: WIDTHS}));
 ```
 
-`dim_app_state` and `dim_mode` are absent, and that is a decision rather than an
-omission. Nothing published names a mode. `dim_app_state` carries a flag that
-arithmetic reads, so versioning it without a fact that joins as-of would record
-the change and fix nothing. ADR 0002 carries both arguments.
+`dim_mode` is absent, and that is a decision rather than an omission. Nothing
+published names a mode, so a history would hold rows nobody reads. ADR 0002
+carries the argument.
 
 ## 3. What the playbook says today
 
@@ -110,6 +110,26 @@ ORDER BY dimension, member_key, version_seq
 
 ```js
 display(Inputs.table(history, {rows: 16, format: {valid_from: utc}, width: WIDTHS}));
+```
+
+A run state carries two flags rather than a description, so it keeps its own
+table. `is_run_state` decides which pulses count as play time, and every run
+reads the version in force while it ran. A state reclassified tomorrow
+changes the runs after tomorrow and no run before it.
+
+```sql echo id=states
+SELECT state_key,
+       version_seq,
+       is_run_state,
+       in_run,
+       valid_from,
+       status
+FROM app_state_history
+ORDER BY state_key, version_seq
+```
+
+```js
+display(Inputs.table(states, {rows: 16, format: {valid_from: utc}, width: WIDTHS}));
 ```
 
 ## 4. What the contract allowed

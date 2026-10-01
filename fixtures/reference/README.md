@@ -29,8 +29,8 @@ wire format.
 
 ## Versions and dates
 
-`characters.csv` and `boss_kinds.csv` hold one row per version, and each row
-declares when it was valid.
+`app_states.csv`, `characters.csv` and `boss_kinds.csv` hold one row per
+version, and each row declares when it was valid.
 
 | Column | Meaning |
 |---|---|
@@ -91,7 +91,7 @@ The join does two jobs.
 
 | Dimension | Played | Documented | Coverage | Never played |
 |---|---|---|---|---|
-| `state` | 10 | 15 | 67% | controls, inventory, mapselect, multiplayer, win |
+| `state` | 11 | 15 | 73% | controls, mapselect, multiplayer, win |
 | `mode` | 1 | 3 | 33% | siege, waves |
 | `char` | 4 | 5 | 80% | sapper |
 | `boss` | 4 | 4 | 100% | none |

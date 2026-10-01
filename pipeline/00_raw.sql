@@ -10,12 +10,16 @@
 -- and the ordering key, the same reason a warehouse orders on ingestion time
 -- rather than on a timestamp supplied by the client.
 
+-- srv as a point in time. srv is epoch milliseconds, and every layer that
+-- compares it with a date or prints it reads it through this one conversion.
+CREATE OR REPLACE MACRO srv_time(srv) AS to_timestamp(srv / 1000.0);
+
 CREATE OR REPLACE VIEW raw_landed AS
 SELECT
     -- Session identity comes from the file the sink wrote, which is one file
     -- per dev server run. regexp_extract is anchored on the sink's own naming.
     regexp_extract(filename, 'session-([0-9TZ:.-]+)\.jsonl$', 1) AS session_id,
-    CAST(to_timestamp(srv / 1000.0) AS DATE)                     AS session_date,
+    CAST(srv_time(srv) AS DATE)                                  AS session_date,
     -- cid is text, always, whatever it looks like.
     --
     -- crypto.randomUUID gives a value the JSON reader infers as UUID. The

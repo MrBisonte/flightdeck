@@ -55,8 +55,8 @@ each one uses, so the arrows here carry no notation.
 | 6 | `10_typed.sql` defines `clean` | DuckDB SQL, in process | `landed`, `quarantine` | `clean` view | `clean` is `landed` minus `quarantine` |
 | 7 | `10_typed.sql` unnests `clean` into eight entities | DuckDB SQL, in process | `clean` | 8 tables | Four nested columns flatten into child rows |
 | 8 | `20_curated.sql` defines eleven views | DuckDB SQL, in process | entities | views | Every business number lives here, and only here |
-| 9 | `22_gold.sql` builds seventeen dimensions, facts and metric views | DuckDB SQL, in process | entities, reference views | tables | The run grain, which a page load does not give |
-| 10 | `25_publish.sql` copies 24 relations to Parquet | `COPY` to local disk, push | views, tables | `warehouse/curated/*.parquet` | ZSTD compression |
+| 9 | `22_gold.sql` builds 26 tables and views: dimensions, facts and metric views | DuckDB SQL, in process | entities, reference views | tables | The run grain, which a page load does not give |
+| 10 | `25_publish.sql` copies 34 relations to Parquet | `COPY` to local disk, push | views, tables | `warehouse/curated/*.parquet` | ZSTD compression |
 | 11 | `30_load_postgres.py` loads twelve relations | libpq over TCP 55432, push | Parquet | PostgreSQL | An explicit relation list, no globbing |
 | 12 | `40_export.py` prints payloads in three formats | local file read, then stdout | Parquet | stdout, files | The exporter makes no network call |
 | 13 | The site queries the Parquet in the browser | HTTPS GET, then DuckDB WebAssembly in the tab, pull | Parquet | rendered page | The site holds no query the pipeline holds |
@@ -433,14 +433,16 @@ decide something that a reader may later need to reproduce?
 | `dim_character` | 2 | A run reads as "archer, starting character". Rewrite that line and the run reads differently |
 | `dim_boss` | 2 | Same argument. An encounter carries the boss description of its day |
 | `dim_contract_cap` | 2 | A record sits in quarantine because a cap said so. Move the cap and the decision stops being reproducible |
-| `dim_app_state` | 1 | `is_run_state` is arithmetic, not description, so versioning it needs a fact that joins as-of. Section 6 tracks that |
+| `dim_app_state` | 2 | `is_run_state` decides which pulses count as play time. `run_pulse` joins the version in force when each pulse arrived, so a reclassification changes only the runs after it |
 | `dim_mode` | 1 | Nothing published names a mode. A history here would hold rows nobody reads |
 
 `dim_character` and `dim_boss` share one table, `dim_member`, because both hold
 a key and a description. The dimension name is a column. Each keeps its own
 current-version table, so a metric view joins `dim_character` and never a
-filter. `reference_history` publishes every version of both, and
-`reference_governance` counts them per dimension for the Governance page.
+filter. `reference_history` publishes every version of both.
+`app_state_history` publishes every version of a run state, in its own file
+because a state carries two flags and a member carries a description.
+`reference_governance` counts all of them per dimension for the Governance page.
 
 **What `valid_from` means here.** It is valid time, declared in the file that
 holds the value. A rebuild from an empty warehouse shows the same history. A
@@ -449,15 +451,21 @@ cap dates from the commit that declared it in `contracts/flight_log.yml`. ADR
 0003 records why the two sources differ.
 
 Every member predates every fact, so an as-of join against a fact's own
-timestamp resolves. Facts still join the current version through
-`dim_character`, and no published view uses the as-of join yet.
+timestamp resolves. `run_pulse` joins `dim_app_state` that way. Characters and
+bosses still reach a fact through the current version in `dim_character` and
+`dim_boss`.
 
 **Verified.** Two builds from an empty warehouse produce the same nine members,
-each at version 1, and the same five caps. `tests/test_versioned_dimensions.py`
-declares a second history in a copy of the tree. It pins four cases: a changed
-description, a withdrawn member, a new member, and an untouched member that
-stays at one row. `tests/test_gold.py` finds exactly one version in force for
-every run and every boss encounter.
+fifteen run states and five caps, each at version 1.
+`tests/test_versioned_dimensions.py` declares a second history in a copy of the
+tree. It pins a changed description, a withdrawn member, a new member, and an
+untouched member that stays at one row.
+
+The same module reclassifies `talents` twice. Dated after the last fact, the
+change moves no run's play time. Dated before the first fact, it raises play
+time for the runs that spent time in `talents`.
+`tests/test_gold.py` finds exactly one version in force for every run and every
+boss encounter.
 
 ---
 
@@ -590,7 +598,7 @@ still add up. That is the point of the quarantine relation.
 | 6 | `blockers.frozen`, `blockers.dashing`, `blockers.x` and `blockers.y` have no documented unit | crow-archer | Open, external |
 | 7 | `blockers.frozen` and `blockers.dashing` read 0 in every fixture row | fixtures | Open, no evidence |
 | 8 | Observed ranges come from 3 sessions. A wider range is likely | fixtures | Accepted |
-| 9 | `dim_app_state` stays Type 1. Reclassifying `is_run_state` rewrites `fact_run.sim_active_s` for every past run. A Type 2 here needs a surrogate key on the fact and a date the CSVs do not carry | pipeline | Open, needs approval |
+| 9 | `dim_app_state` was Type 1, so reclassifying `is_run_state` rewrote `fact_run.sim_active_s` for every past run. It is Type 2 now, and `run_pulse` joins the version in force when each pulse arrived. ADR 0004 | pipeline | Closed |
 | 10 | `may_publish` governs `sessions.origin` and nothing else. A withheld origin that lands inside free text, such as `errors.msg`, would still reach the site. `tests/test_live_path.py` scans the published bytes for one, which catches it rather than preventing it | pipeline | Open, needs approval |
 | 11 | A capture from `https://mrbisonte.github.io` was missing. PR #15 added one, recorded through the Fly sink with `?rec=1` | crow-archer | Closed |
 
