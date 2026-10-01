@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Accepted |
+| Status | Superseded in part by ADR 0003, which declares `valid_from` in the source files. The choice of which dimensions to version stands |
 | Date | 2026-09-12 |
 | Relates to | `docs/hlad.md` section 4.3, `pipeline/22_gold.sql` |
 

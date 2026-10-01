@@ -18,9 +18,11 @@ TYPED_SQL = (ROOT / "pipeline" / "10_typed.sql").read_text(encoding="utf-8")
 
 
 def read_reference(name: str, column: str) -> list[str]:
+    """One value per member in force. A versioned file also lists closed rows,
+    which carry a valid_to, and those are history rather than the domain."""
     path = ROOT / "fixtures" / "reference" / name
     with path.open(encoding="utf-8", newline="") as fh:
-        return [row[column] for row in csv.DictReader(fh)]
+        return [row[column] for row in csv.DictReader(fh) if not row.get("valid_to")]
 
 
 @pytest.mark.parametrize(
@@ -68,11 +70,28 @@ def test_span_enum_is_the_six_frame_sections_in_order():
 # how two caps reached the YAML and never reached the warehouse: the test only
 # checked the three it already knew about.
 @pytest.mark.parametrize("cap_key", sorted(CONTRACT["caps"]))
-def test_sql_constant_matches_contract_cap(cap_key):
-    """The caps are a table in the warehouse. They must equal the YAML."""
-    match = re.search(rf"\('{cap_key}',\s*(\d+)\)", TYPED_SQL)
-    assert match, f"{cap_key} is not inserted into contract_caps"
-    assert int(match.group(1)) == CONTRACT["caps"][cap_key]
+def test_sql_rows_match_contract_cap(cap_key):
+    """The caps are a table in the warehouse. Every version must equal the YAML,
+    dates included, and no version may exist in one place only."""
+    in_sql = [
+        (int(value), start.replace(" ", "T").replace("+00", "Z"),
+         None if end == "NULL" else end.strip("'").replace(" ", "T").replace("+00", "Z"))
+        for value, start, end in re.findall(
+            rf"\('{cap_key}',\s*(\d+),\s*'([^']+)',\s*(NULL|'[^']+')\)", TYPED_SQL)
+    ]
+    in_yaml = [(v["value"], v["valid_from"], v.get("valid_to"))
+               for v in CONTRACT["caps"][cap_key]]
+    assert in_sql, f"{cap_key} is not inserted into contract_caps"
+    assert in_sql == in_yaml
+
+
+@pytest.mark.parametrize("cap_key", sorted(CONTRACT["caps"]))
+def test_every_cap_has_one_value_in_force(cap_key):
+    """cap() reads the open version. Two would make the check ambiguous, and
+    none would make it read NULL, which passes every record."""
+    versions = CONTRACT["caps"][cap_key]
+    assert sum(1 for v in versions if v.get("valid_to") is None) == 1, versions
+    assert versions[-1].get("valid_to") is None, "the open version comes last"
 
 
 def test_caps_are_a_table_not_session_variables():

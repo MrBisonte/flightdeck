@@ -19,8 +19,18 @@ SELECT * FROM read_parquet('warehouse/raw/**/*.parquet', hive_partitioning = tru
 -- Reference dimensions, the second source. Documented domain, not observed values.
 CREATE OR REPLACE VIEW ref_states AS SELECT * FROM read_csv('fixtures/reference/app_states.csv');
 CREATE OR REPLACE VIEW ref_modes  AS SELECT * FROM read_csv('fixtures/reference/modes.csv');
-CREATE OR REPLACE VIEW ref_chars  AS SELECT * FROM read_csv('fixtures/reference/characters.csv');
-CREATE OR REPLACE VIEW ref_bosses AS SELECT * FROM read_csv('fixtures/reference/boss_kinds.csv');
+-- characters.csv and boss_kinds.csv hold one row per version, each with the
+-- dates it was valid in the game. The _versions views carry every row for
+-- 22_gold.sql. ref_chars and ref_bosses keep the shape every check here reads:
+-- one row per member, its version still in force.
+CREATE OR REPLACE VIEW ref_char_versions AS
+SELECT * FROM read_csv('fixtures/reference/characters.csv',
+                       types = {'valid_from': 'TIMESTAMPTZ', 'valid_to': 'TIMESTAMPTZ'});
+CREATE OR REPLACE VIEW ref_boss_versions AS
+SELECT * FROM read_csv('fixtures/reference/boss_kinds.csv',
+                       types = {'valid_from': 'TIMESTAMPTZ', 'valid_to': 'TIMESTAMPTZ'});
+CREATE OR REPLACE VIEW ref_chars  AS SELECT "char", note FROM ref_char_versions WHERE valid_to IS NULL;
+CREATE OR REPLACE VIEW ref_bosses AS SELECT boss, note   FROM ref_boss_versions WHERE valid_to IS NULL;
 -- The known request origins. Not from the playbook: this one describes where
 -- the game runs, so scripts/sanitize_flightlog.py reads the same file.
 CREATE OR REPLACE VIEW ref_origins AS SELECT * FROM read_csv('fixtures/reference/origins.csv');
@@ -42,19 +52,28 @@ CREATE OR REPLACE MACRO origin_of(href) AS
 --
 -- Mirrored from contracts/flight_log.yml, which is the source of truth.
 -- tests/test_contract.py asserts these agree.
-CREATE OR REPLACE TABLE contract_caps (name VARCHAR, value BIGINT);
+--
+-- One row per value a cap has held, with the dates the contract declared it.
+-- cap() reads the value still in force. 22_gold.sql keeps the rest as history.
+CREATE OR REPLACE TABLE contract_caps (
+    name       VARCHAR,
+    value      BIGINT,
+    valid_from TIMESTAMP WITH TIME ZONE,
+    valid_to   TIMESTAMP WITH TIME ZONE
+);
 -- Every cap the contract declares, not only the ones a check happens to use.
 -- A cap that never reaches the warehouse is a rule no query can test, and
 -- logger_ring_capacity and sink_body_bytes sat in the YAML alone until the
 -- contract test started deriving its parameters from the YAML itself.
 INSERT INTO contract_caps VALUES
-    ('events_per_beat',       400),
-    ('events_per_bye',        100),
-    ('trace_frames',          120),
-    ('logger_ring_capacity',  500),
-    ('sink_body_bytes',   1000000);
+    ('events_per_beat',       400, '2026-08-31 05:47:22+00', NULL),
+    ('events_per_bye',        100, '2026-08-31 05:47:22+00', NULL),
+    ('trace_frames',          120, '2026-08-31 05:47:22+00', NULL),
+    ('logger_ring_capacity',  500, '2026-08-31 05:47:22+00', NULL),
+    ('sink_body_bytes',   1000000, '2026-08-31 05:47:22+00', NULL);
 
-CREATE OR REPLACE MACRO cap(n) AS (SELECT value FROM contract_caps WHERE name = n);
+CREATE OR REPLACE MACRO cap(n) AS
+    (SELECT value FROM contract_caps WHERE name = n AND valid_to IS NULL);
 
 -- page_load_seq numbers the page loads in a file. client_id says which one a
 -- record belongs to, and it is what decides the number.

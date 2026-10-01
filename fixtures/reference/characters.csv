@@ -1,6 +1,6 @@
-char,note
-archer,starting character
-wizard,caster
-knight,melee
-ranger,ranged
-sapper,explosives
+char,note,valid_from,valid_to
+archer,starting character,2026-07-19T22:24:09Z,
+wizard,caster,2026-07-19T22:24:09Z,
+knight,melee,2026-07-19T22:24:09Z,
+ranger,ranged,2026-08-15T14:13:28Z,
+sapper,explosives,2026-08-23T21:36:40Z,

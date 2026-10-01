@@ -27,6 +27,27 @@ wire format.
 | `characters.csv` | 5 | The pulse table |
 | `boss_kinds.csv` | 4 | The observed boss values |
 
+## Versions and dates
+
+`characters.csv` and `boss_kinds.csv` hold one row per version, and each row
+declares when it was valid.
+
+| Column | Meaning |
+|---|---|
+| `valid_from` | UTC commit date of the first crow-archer `master` commit whose `src/` contains the key as a quoted literal |
+| `valid_to` | Empty while the version is in force |
+
+To change a description, give the current row a `valid_to` and add a row that
+starts at the same instant. To withdraw a member, give its row a `valid_to` and
+add nothing. Never edit a description in place or delete a row: the file is
+the history, and every build rebuilds the dimension from it.
+
+To reproduce a date, run this in a crow-archer clone:
+
+```bash
+git log origin/master --reverse -G"[\"'\`]sapper[\"'\`]" --format=%cI -- src | head -1
+```
+
 ## `origins.csv`, the fifth table
 
 This one has a different source. The playbook documents the wire format, and

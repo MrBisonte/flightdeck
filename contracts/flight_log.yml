@@ -40,12 +40,20 @@ enums:
   # Frame sections, in the order they run.
   span: [sim, tiles, fog, bodies, vignette, hud]
 
+# Each cap lists every value it has held, oldest first. valid_from is the commit
+# that declared the value in this file. To change a cap, give its last entry a
+# valid_to and add a new entry that starts there. Never edit a value in place.
 caps:
-  events_per_beat: 400          # flight-recorder.ts MAX_EVENTS_PER_BEAT
-  events_per_bye: 100           # the final drain is the last 100 entries
-  trace_frames: 120             # the tracer holds at most 120 frames
-  logger_ring_capacity: 500     # src/sim/log.ts Logger
-  sink_body_bytes: 1000000      # flight-sink.ts MAX_BODY_BYTES
+  events_per_beat:              # flight-recorder.ts MAX_EVENTS_PER_BEAT
+    - {value: 400, valid_from: "2026-08-31T05:47:22Z"}
+  events_per_bye:               # the final drain is the last 100 entries
+    - {value: 100, valid_from: "2026-08-31T05:47:22Z"}
+  trace_frames:                 # the tracer holds at most 120 frames
+    - {value: 120, valid_from: "2026-08-31T05:47:22Z"}
+  logger_ring_capacity:         # src/sim/log.ts Logger
+    - {value: 500, valid_from: "2026-08-31T05:47:22Z"}
+  sink_body_bytes:              # flight-sink.ts MAX_BODY_BYTES
+    - {value: 1000000, valid_from: "2026-08-31T05:47:22Z"}
 
 invariants:
   # srv is stamped by the server on arrival, so it is the only clock the page

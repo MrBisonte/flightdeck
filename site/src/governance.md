@@ -28,8 +28,9 @@ Switch to Engineering, top right, to read the SQL above each result.
 
 ## 1. What is under version control
 
-The gold dimensions that keep their history are named below. A version opens
-when this pipeline first sees a value and closes when the value moves.
+The gold dimensions that keep their history are named below. Each version
+carries the dates its source file declares, so every rebuild shows the same
+history.
 
 ```sql echo id=totals
 SELECT members,
@@ -62,28 +63,28 @@ display(html`<div class="grid grid-cols-3">
 ```
 
 Every version is still current, because no reference value has changed since
-the warehouse first ran. The history exists so that the
-first move leaves a record, and `tests/test_versioned_dimensions.py` edits the
-playbook between two runs to prove that it does.
+its source declared it. The history exists so that the first change leaves a
+record, and `tests/test_versioned_dimensions.py` declares a second version to
+prove that it does.
 
 ## 2. One policy per dimension
 
-`contract cap` carries the oldest first version in that table. It was the first
-dimension here to keep a history, and the timestamps say so.
+A character or a boss dates from the first game commit that names it. A
+contract cap dates from the commit that put it in the contract.
 
 ```sql echo id=policy
 SELECT dimension,
        members,
        versions,
        superseded,
-       first_seen
+       first_valid_from
 FROM reference_governance
 WHERE dimension <> 'every dimension'
 ORDER BY dimension
 ```
 
 ```js
-display(Inputs.table(policy, {rows: 8, format: {first_seen: utc}, width: WIDTHS}));
+display(Inputs.table(policy, {rows: 8, format: {first_valid_from: utc}, width: WIDTHS}));
 ```
 
 `dim_app_state` and `dim_mode` are absent, and that is a decision rather than an
@@ -93,9 +94,8 @@ the change and fix nothing. ADR 0002 carries both arguments.
 
 ## 3. What the playbook says today
 
-The cards above count the members and their versions. The table below gives
-each one the moment this pipeline first read it. A rewritten description closes
-the row you see here and opens the next one.
+The table below gives each version the date it took effect. A rewritten
+description closes the row you see here and opens the next one.
 
 ```sql echo id=history
 SELECT dimension,
@@ -114,9 +114,9 @@ display(Inputs.table(history, {rows: 16, format: {valid_from: utc}, width: WIDTH
 
 ## 4. What the contract allowed
 
-Each quarantine decision depends on the cap in force at the time. The table
-keeps every past cap value this warehouse has seen, so an old decision stays
-reproducible after the cap changes.
+Each quarantine decision depends on the cap in force at the time. The contract
+keeps every value a cap has held, with its dates, so a reader can still check an
+old decision against its cap.
 
 ```sql echo id=caps
 SELECT cap_key,
@@ -156,11 +156,9 @@ of the gap.
 
 ## What this page cannot tell you
 
-`valid_from` records when the pipeline read a value, not when it changed in
-the game. The reference files carry no dates, so this page cannot show which values
-applied during a run.
+Each date answers one narrow question.
 
-| Column | Records |
-|---|---|
-| `valid_from` | when the pipeline read the value |
-| *(none)* | when the value changed in the game |
+| Date | Records | Does not record |
+|---|---|---|
+| `valid_from`, member | the first game commit that names the key | when the description became true |
+| `valid_from`, cap | the commit that put the value in the contract | when the game adopted the limit |

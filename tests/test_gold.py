@@ -211,6 +211,33 @@ def test_contract_caps_are_type_two(con):
     assert closed_open == 0, "a superseded row must carry a valid_to"
 
 
+@pytest.mark.parametrize("fact, grain, key, dimension", [
+    ("fact_run", "run_id", "character_key", "character"),
+    ("fact_boss_encounter", "encounter_id", "boss_key", "boss"),
+])
+def test_every_fact_finds_the_version_in_force_when_it_started(con, fact, grain, key,
+                                                                dimension):
+    """The reference files declare when each version was valid, so a fact can
+    join the version in force at its own timestamp. Exactly one, not none and
+    not two. srv is epoch milliseconds."""
+    path = (CURATED / "reference_history.parquet").as_posix()
+    unresolved, = one(con, f"""
+        WITH matched AS (
+            SELECT f.{key}, count(h.version_seq) AS versions
+            FROM {fact} f
+            LEFT JOIN read_parquet('{path}') h
+                   ON h.dimension = '{dimension}'
+                  AND h.member_key = f.{key}
+                  AND to_timestamp(f.started_srv / 1000) >= h.valid_from
+                  AND to_timestamp(f.started_srv / 1000)
+                      < coalesce(h.valid_to, 'infinity'::TIMESTAMPTZ)
+            GROUP BY f.{grain}, f.{key}
+        )
+        SELECT count(*) FILTER (WHERE versions <> 1) FROM matched
+    """)
+    assert unresolved == 0
+
+
 # --------------------------------------------------------------------------
 # The event ring, and the bridge that places it inside a run
 # --------------------------------------------------------------------------
