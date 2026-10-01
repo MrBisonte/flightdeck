@@ -40,12 +40,66 @@ enums:
   # Frame sections, in the order they run.
   span: [sim, tiles, fog, bodies, vignette, hud]
 
+# The unit of every numeric field on the wire. The wire sends bare numbers, so
+# the unit lives here, with the crow-archer file that sets the value. A section
+# name under trace.spans is written as *. tests/test_contract.py fails when a
+# numeric field in contracts/wire_schema.jsonl has no entry here, or an entry
+# names a unit that unit_kinds does not define.
+unit_kinds:
+  epoch_ms: milliseconds since 1970-01-01 UTC, from Date.now()
+  page_ms: milliseconds since the page loaded, the performance.now() clock
+  ms: a duration in milliseconds
+  sim_s: seconds of simulation time, which stops when the game pauses
+  px: pixels
+  count: a number of things, named in the source
+  ratio: a ratio with no unit
+  ordinal: a sequence number
+
+units:
+  srv:                      {unit: epoch_ms, source: "src/dev/flight-sink.ts: Date.now() on arrival"}
+  wall:                     {unit: epoch_ms, source: "src/dev/flight-recorder.ts: Date.now()"}
+  perf:                     {unit: page_ms,  source: "src/dev/flight-recorder.ts: Math.round(performance.now())"}
+  raf:                      {unit: count,    source: "src/dev/flight-recorder.ts: animation frames since the recorder started"}
+  dpr:                      {unit: ratio,    source: "src/dev/flight-recorder.ts: devicePixelRatio"}
+  dropped:                  {unit: count,    source: "src/dev/flight-recorder.ts: events cut by MAX_EVENTS_PER_BEAT"}
+  pulse.t:                  {unit: sim_s,    source: "src/dev/flight-recorder.ts: Pulse.t"}
+  pulse.lastTs:             {unit: page_ms,  source: "src/dev/flight-recorder.ts: Pulse.lastTs, the frame clock of the game loop"}
+  pulse.held:               {unit: count,    source: "src/dev/flight-recorder.ts: Pulse.held, hitstop frames still owed"}
+  pulse.hp:                 {unit: count,    source: "src/dev/flight-recorder.ts: Pulse.hp, hit points"}
+  pulse.kills:              {unit: count,    source: "src/dev/flight-recorder.ts: Pulse.kills"}
+  pulse.crows:              {unit: count,    source: "src/dev/flight-recorder.ts: Pulse.crows"}
+  pulse.skels:              {unit: count,    source: "src/dev/flight-recorder.ts: Pulse.skels"}
+  pulse.soldiers:           {unit: count,    source: "src/dev/flight-recorder.ts: Pulse.soldiers"}
+  pulse.arrows:             {unit: count,    source: "src/dev/flight-recorder.ts: Pulse.arrows"}
+  events[].id:              {unit: ordinal,  source: "src/sim/log.ts: nextId, restarts on each page load"}
+  events[].timestamp:       {unit: epoch_ms, source: "src/sim/log.ts: Date.now() at record time"}
+  blockers.frozen:          {unit: sim_s,    source: "src/legacy/game.js: playerFrozenTimer, counts down by dt"}
+  blockers.dashing:         {unit: sim_s,    source: "src/legacy/game.js: knightDash.timer, counts down by dt"}
+  blockers.x:               {unit: px,       source: "src/legacy/game.js: player.x"}
+  blockers.y:               {unit: px,       source: "src/legacy/game.js: player.y"}
+  trace.frames:             {unit: count,    source: "src/render/trace.ts: frames the summary averages over"}
+  trace.spans.*.ms:         {unit: ms,       source: "src/render/trace.ts: mean per frame"}
+  trace.spans.*.msMax:      {unit: ms,       source: "src/render/trace.ts: worst single frame"}
+  trace.spans.*.fillRect:   {unit: count,    source: "src/render/trace.ts: mean calls per frame"}
+  trace.spans.*.drawImage:  {unit: count,    source: "src/render/trace.ts: mean calls per frame"}
+  trace.spans.*.fill:       {unit: count,    source: "src/render/trace.ts: mean calls per frame"}
+  trace.spans.*.stroke:     {unit: count,    source: "src/render/trace.ts: mean calls per frame"}
+  trace.spans.*.px:         {unit: px,       source: "src/render/trace.ts: mean fill area per frame"}
+
+# Each cap lists every value it has held, oldest first. valid_from is the commit
+# that declared the value in this file. To change a cap, give its last entry a
+# valid_to and add a new entry that starts there. Never edit a value in place.
 caps:
-  events_per_beat: 400          # flight-recorder.ts MAX_EVENTS_PER_BEAT
-  events_per_bye: 100           # the final drain is the last 100 entries
-  trace_frames: 120             # the tracer holds at most 120 frames
-  logger_ring_capacity: 500     # src/sim/log.ts Logger
-  sink_body_bytes: 1000000      # flight-sink.ts MAX_BODY_BYTES
+  events_per_beat:              # flight-recorder.ts MAX_EVENTS_PER_BEAT
+    - {value: 400, valid_from: "2026-08-31T05:47:22Z"}
+  events_per_bye:               # the final drain is the last 100 entries
+    - {value: 100, valid_from: "2026-08-31T05:47:22Z"}
+  trace_frames:                 # the tracer holds at most 120 frames
+    - {value: 120, valid_from: "2026-08-31T05:47:22Z"}
+  logger_ring_capacity:         # src/sim/log.ts Logger
+    - {value: 500, valid_from: "2026-08-31T05:47:22Z"}
+  sink_body_bytes:              # flight-sink.ts MAX_BODY_BYTES
+    - {value: 1000000, valid_from: "2026-08-31T05:47:22Z"}
 
 invariants:
   # srv is stamped by the server on arrival, so it is the only clock the page

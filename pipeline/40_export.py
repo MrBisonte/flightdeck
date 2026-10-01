@@ -186,15 +186,16 @@ def build_otlp_traces(con: duckdb.DuckDBPyConnection) -> tuple[dict, int]:
     """
     grouped: dict[tuple, list[dict]] = {}
     for row in _rows(con, "spans"):
-        key = (row["session_id"], row["page_load_seq"], row["srv"], row["origin"])
+        key = (row["session_id"], row["page_load_seq"], row["srv"], row["origin"],
+               row["event_id"])
         grouped.setdefault(key, []).append(row)
 
     spans_out: list[dict] = []
     seen_ids: set[str] = set()
     collisions = 0
 
-    for (session_id, page_load_seq, srv, origin), sections in grouped.items():
-        trace_id = _hex_id(session_id, page_load_seq, srv, origin, nbytes=16)
+    for (session_id, page_load_seq, srv, origin, event_id), sections in grouped.items():
+        trace_id = _hex_id(session_id, page_load_seq, srv, origin, event_id, nbytes=16)
         root_id = _hex_id(trace_id, "root", nbytes=8)
         start = _nanos(srv)
         total_ms = sum(s["ms"] for s in sections)
@@ -470,8 +471,8 @@ def main() -> int:
 
     if collisions:
         print(f"  WARNING: {collisions} span ids collide.")
-        print("    One beat can drain two trace summaries, and spans carries no")
-        print("    column to tell them apart. See docs/hlad.md section 6, item 1.")
+        print("    Two rows of spans share a key, so a trace holds the same section")
+        print("    twice. tests/test_export.py expects none.")
         print()
 
     print("  Same Parquet files PostgreSQL read. One curated layer, three consumers.")

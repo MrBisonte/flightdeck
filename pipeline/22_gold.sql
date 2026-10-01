@@ -27,19 +27,18 @@
 -- A dimension whose value decided something keeps its history. A quarantine
 -- decision taken under events_per_beat = 400 cannot be reproduced once that
 -- number moves, and a run labelled "archer, fast glass cannon" cannot be read
--- back once the playbook rewrites that line. Those are Type 2.
+-- back once the playbook rewrites that line. A run's play time is the sum of
+-- the pulses whose state advances the clock, so reclassifying a state would
+-- rewrite every past run. Those are Type 2.
 --
--- app_states and modes are rebuilt from source, Type 1. Nothing published names
--- a mode, and app_states carries two flags rather than a description, so it
--- needs its own table and its own decision. Both are noted in docs/hlad.md.
+-- modes are rebuilt from source, Type 1. Nothing published names a mode.
 --
--- valid_from here is transaction time: the moment this pipeline first saw the
--- value, not the moment it became true in the game. The reference CSVs carry no
--- dates, so no other reading is available from them. One consequence is worth
--- stating plainly rather than discovering later. An as-of join against a fact's
--- own timestamp is not supported, because every version starts after every fact
--- in this warehouse. Facts join the current version, which is what dim_character
--- and dim_boss already hand them.
+-- valid_from here is valid time: when the value became true in its own source,
+-- declared in the file that holds it. A member dates from the first crow-archer
+-- commit that names it, and a cap from the commit that put it in the contract.
+-- Every member predates every fact, so a fact can join the version in force at
+-- its own timestamp. The dates live in committed files, so a rebuild from
+-- nothing produces the same history.
 
 --------------------------------------------------------------------------------
 -- Type 1 dimensions. Straight from the second source, overwritten every run.
@@ -47,87 +46,74 @@
 CREATE OR REPLACE TABLE dim_mode AS
 SELECT mode AS mode_key, note AS description FROM ref_modes;
 
+--------------------------------------------------------------------------------
+-- dim_app_state. Type 2, and the one dimension a fact joins as-of.
+--
+-- is_run_state is arithmetic, not description: fact_run.sim_active_s sums the
+-- pulses it flags. run_pulse below joins the version in force when each pulse
+-- arrived, so a state reclassified from a later date changes the runs after
+-- that date and leaves every earlier run as it was.
+--------------------------------------------------------------------------------
 CREATE OR REPLACE TABLE dim_app_state AS
-SELECT state AS state_key, is_run_state, in_run, note AS description FROM ref_states;
+SELECT state AS state_key,
+       is_run_state,
+       in_run,
+       note AS description,
+       CAST(row_number() OVER (PARTITION BY state ORDER BY valid_from) AS INTEGER)
+            AS version_seq,
+       valid_from,
+       valid_to,
+       valid_to IS NULL AS is_current
+FROM ref_state_versions;
+
+-- Its own file rather than rows in reference_history, because a state carries
+-- two flags and a member carries a description. Folding them together would
+-- hide a change to a flag behind an unchanged description.
+CREATE OR REPLACE VIEW app_state_history AS
+SELECT state_key,
+       version_seq,
+       is_run_state,
+       in_run,
+       description,
+       valid_from,
+       valid_to,
+       is_current,
+       CASE WHEN is_current THEN 'in force' ELSE 'superseded' END AS status
+FROM dim_app_state
+ORDER BY state_key, version_seq;
 
 --------------------------------------------------------------------------------
 -- dim_member. Type 2, every versioned reference member in one table.
 --
 -- Characters and bosses have the same shape, a key and a description, so they
--- share one table and the dimension name is a column. Three passes written once
--- beat the same three passes written twice. Nothing downstream reads this table:
--- each dimension keeps its own view below, so a join stays a join against
--- dim_character rather than a filter a caller has to remember.
+-- share one table and the dimension name is a column. Nothing downstream reads
+-- this table: each dimension keeps its own table below, so a join stays a join
+-- against dim_character rather than a filter a caller has to remember.
 --
--- CREATE TABLE IF NOT EXISTS, never CREATE OR REPLACE. Replacing it every run
--- would delete the history it exists to hold. demo.sh removes warehouse/raw and
--- leaves the database file, so the rows survive a normal rebuild. Deleting
--- flightdeck.duckdb by hand still resets the history, which no design here can
--- prevent.
---
--- Type 2 needs two passes at least. One statement cannot both close the old row
--- and open the new one for the same key, because WHEN MATCHED updates the row it
--- matched. Anything that looks like one statement is hiding the second.
+-- The reference files declare every version with its dates, so this is a plain
+-- rebuild. No pass compares the file to what an earlier run stored, and
+-- deleting flightdeck.duckdb loses nothing.
 --------------------------------------------------------------------------------
 CREATE OR REPLACE VIEW ref_members AS
-SELECT 'character' AS dimension, "char" AS member_key, note AS description FROM ref_chars
+SELECT 'character' AS dimension, "char" AS member_key, note AS description, valid_from, valid_to
+FROM ref_char_versions
 UNION ALL
-SELECT 'boss', boss, note FROM ref_bosses;
+SELECT 'boss', boss, note, valid_from, valid_to FROM ref_boss_versions;
 
-CREATE TABLE IF NOT EXISTS dim_member (
-    dimension   VARCHAR,
-    member_key  VARCHAR,
-    description VARCHAR,
-    version_seq INTEGER,
-    valid_from  TIMESTAMP WITH TIME ZONE,
-    valid_to    TIMESTAMP WITH TIME ZONE,
-    is_current  BOOLEAN
-);
-
--- Pass 1. Close the current row of any member whose description moved.
-MERGE INTO dim_member AS t
-USING ref_members AS s
-   ON t.dimension = s.dimension AND t.member_key = s.member_key AND t.is_current
-WHEN MATCHED AND t.description IS DISTINCT FROM s.description
-  THEN UPDATE SET valid_to = now(), is_current = false;
-
--- Pass 2. Close any member the playbook no longer lists. A character that was
--- withdrawn still described the runs it was played in.
-UPDATE dim_member AS t
-   SET valid_to = now(), is_current = false
- WHERE t.is_current
-   AND NOT EXISTS (
-       SELECT 1 FROM ref_members s
-        WHERE s.dimension = t.dimension AND s.member_key = t.member_key
-   );
-
--- Pass 3. Open a row for every member without a current one. That covers a new
--- member and a member pass 1 just closed, in the same statement. version_seq
--- counts from the whole history of that member, so a reopened key continues its
--- numbering instead of restarting at one.
-INSERT INTO dim_member
-SELECT s.dimension,
-       s.member_key,
-       s.description,
-       1 + coalesce((SELECT max(h.version_seq) FROM dim_member h
-                      WHERE h.dimension = s.dimension
-                        AND h.member_key = s.member_key), 0),
-       now(),
-       NULL,
-       true
-FROM ref_members s
-WHERE NOT EXISTS (
-    SELECT 1 FROM dim_member t
-     WHERE t.dimension = s.dimension AND t.member_key = s.member_key AND t.is_current
-);
+CREATE OR REPLACE TABLE dim_member AS
+SELECT dimension,
+       member_key,
+       description,
+       CAST(row_number() OVER (PARTITION BY dimension, member_key ORDER BY valid_from)
+            AS INTEGER) AS version_seq,
+       valid_from,
+       valid_to,
+       valid_to IS NULL AS is_current
+FROM ref_members;
 
 -- The current version of each dimension, with the columns every consumer here
 -- already reads. The version columns are deliberately absent: a join that wants
 -- one row per character must not have to filter for it.
---
--- Tables and not views, so that a database built before dim_member existed is
--- replaced rather than refused. CREATE OR REPLACE cannot turn a table into a
--- view, and these two were tables.
 CREATE OR REPLACE TABLE dim_character AS
 SELECT member_key AS character_key, description
 FROM dim_member WHERE dimension = 'character' AND is_current;
@@ -154,44 +140,22 @@ ORDER BY dimension, member_key, version_seq;
 -- dim_contract_cap. Type 2, on its own, for one reason.
 --
 -- A cap is a number and a member is a description, so folding the cap into
--- dim_member would mean storing 400 as text. The passes below are the same three
--- passes, kept separate to keep the column a BIGINT. Two implementations is the
--- price of that, and the second one is where any third belongs.
+-- dim_member would mean storing 400 as text. The versions come from
+-- contract_caps, which 10_typed.sql fills from the contract.
 --
 -- The history matters because the cap decided something. A record moved to
--- quarantine because a cap said so, and once that cap changes the decision
--- becomes unreproducible unless the old value survives somewhere.
+-- quarantine because a cap said so, and the old value has to survive the change
+-- for that decision to stay explainable.
 --------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS dim_contract_cap (
-    cap_key    VARCHAR,
-    cap_value  BIGINT,
-    valid_from TIMESTAMP WITH TIME ZONE,
-    valid_to   TIMESTAMP WITH TIME ZONE,
-    is_current BOOLEAN
-);
-
--- Pass 1. Close the current row of any cap whose value moved.
-MERGE INTO dim_contract_cap AS t
-USING contract_caps AS s
-   ON t.cap_key = s.name AND t.is_current
-WHEN MATCHED AND t.cap_value IS DISTINCT FROM s.value
-  THEN UPDATE SET valid_to = now(), is_current = false;
-
--- Pass 2. Close any cap the contract no longer declares. A rule that was
--- withdrawn still governed the records it judged while it stood.
-UPDATE dim_contract_cap
-   SET valid_to = now(), is_current = false
- WHERE is_current
-   AND cap_key NOT IN (SELECT name FROM contract_caps);
-
--- Pass 3. Open a row for every cap without a current one. That covers a brand
--- new cap and a cap pass 1 just closed, in the same statement.
-INSERT INTO dim_contract_cap
-SELECT s.name, s.value, now(), NULL, true
-FROM contract_caps s
-WHERE NOT EXISTS (
-    SELECT 1 FROM dim_contract_cap t WHERE t.cap_key = s.name AND t.is_current
-);
+CREATE OR REPLACE TABLE dim_contract_cap AS
+SELECT name  AS cap_key,
+       value AS cap_value,
+       CAST(row_number() OVER (PARTITION BY name ORDER BY valid_from) AS INTEGER)
+             AS version_seq,
+       valid_from,
+       valid_to,
+       valid_to IS NULL AS is_current
+FROM contract_caps;
 
 CREATE OR REPLACE VIEW contract_cap_history AS
 SELECT cap_key,
@@ -209,20 +173,15 @@ ORDER BY cap_key, valid_from;
 -- but may not aggregate. So the totals live here. GROUPING SETS gives the per
 -- dimension rows and the total from one scan, which keeps the two from ever
 -- disagreeing.
---
--- dim_contract_cap joins in through a window rather than a stored column. It
--- predates version_seq and adding the column would rewrite its history.
 CREATE OR REPLACE VIEW reference_governance AS
 WITH versioned AS (
     SELECT dimension, member_key, version_seq, valid_from, is_current
     FROM dim_member
     UNION ALL
-    SELECT 'contract cap' AS dimension,
-           cap_key        AS member_key,
-           CAST(row_number() OVER (PARTITION BY cap_key ORDER BY valid_from) AS INTEGER)
-                          AS version_seq,
-           valid_from,
-           is_current
+    SELECT 'app state', state_key, version_seq, valid_from, is_current
+    FROM dim_app_state
+    UNION ALL
+    SELECT 'contract cap', cap_key, version_seq, valid_from, is_current
     FROM dim_contract_cap
 ),
 rolled AS (
@@ -234,7 +193,7 @@ rolled AS (
            CAST(count(*) AS INTEGER)                            AS versions,
            CAST(count(*) FILTER (WHERE NOT is_current) AS INTEGER) AS superseded,
            max(version_seq)                                     AS deepest_history,
-           min(valid_from)                                      AS first_seen,
+           min(valid_from)                                      AS first_valid_from,
            max(valid_from)                                      AS last_change
     FROM versioned
     GROUP BY GROUPING SETS ((dimension), ())
@@ -245,7 +204,7 @@ SELECT coalesce(dimension, 'every dimension') AS dimension,
        versions,
        superseded,
        deepest_history,
-       first_seen,
+       first_valid_from,
        last_change
 FROM rolled
 ORDER BY is_total, dimension;
@@ -281,7 +240,12 @@ WITH labelled AS (
            -- same page load. The last pulse of a page load covers nothing.
            coalesce(lead(p.srv) OVER w - p.srv, 0) / 1000.0 AS held_s
     FROM pulses p
-    JOIN dim_app_state d ON d.state_key = p.state
+    -- The version in force when the pulse arrived. Every state predates every
+    -- pulse, and tests/test_versioned_dimensions.py fails if one does not.
+    JOIN dim_app_state d
+      ON d.state_key = p.state
+     AND srv_time(p.srv) >= d.valid_from
+     AND srv_time(p.srv) <  coalesce(d.valid_to, 'infinity'::TIMESTAMPTZ)
     WINDOW w AS (PARTITION BY p.session_id, p.page_load_seq ORDER BY p.srv)
 ),
 numbered AS (
@@ -612,7 +576,7 @@ SELECT run_id,
 FROM fact_run;
 
 -- How far each run got, as a funnel over states the reference dimension
--- documents. A renamed state shows up in reference_history before it breaks
+-- documents. A renamed state shows up in app_state_history before it breaks
 -- this chart.
 CREATE OR REPLACE VIEW run_funnel AS
 SELECT 'started a run'             AS step, 1 AS step_seq, CAST(count(DISTINCT run_id) AS INTEGER) AS runs FROM run_pulse

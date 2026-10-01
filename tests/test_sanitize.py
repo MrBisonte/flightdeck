@@ -8,7 +8,8 @@ import pytest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "scripts"))
 
 from sanitize_flightlog import (browser_family, check_clean, listed_origins, mask_origins,
-                                MASK, publishable_origins, sanitize_record, scrub_origins)
+                                MASK, publishable_origins, sanitize_live_record, sanitize_record,
+                                scrub_origins)
 
 
 @pytest.mark.parametrize(
@@ -236,3 +237,20 @@ def test_the_live_gate_still_refuses_an_unlisted_origin(tmp_path):
                                "href": "https://someone-elses.example/game"}) + "\n",
                    encoding="utf-8")
     assert any("unlisted origin" in p for p in check_clean(bad, listed_origins()))
+
+
+def test_a_live_capture_keeps_a_withheld_origin_in_href_only():
+    """href feeds the origin join, and the publish step withholds the column
+    parsed from it. Free text has no such column, so a withheld origin there is
+    masked before the pipeline reads it. A publishable origin stays in both."""
+    withheld = sorted(listed_origins() - publishable_origins())[0]
+    public = "https://mrbisonte.github.io"
+    rec = sanitize_live_record({
+        "kind": "err", "href": withheld + "/crow-archer/",
+        "msg": f"failed on {withheld}/a.js and {public}/b.js",
+        "events": [{"message": f"retry {withheld}/a.js"}],
+    })
+    assert rec["href"] == withheld + "/crow-archer/"
+    assert rec["msg"] == f"failed on {MASK}/a.js and {public}/b.js"
+    assert rec["events"][0]["message"] == f"retry {MASK}/a.js"
+    assert sanitize_live_record(dict(rec)) == rec

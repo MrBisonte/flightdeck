@@ -55,8 +55,8 @@ each one uses, so the arrows here carry no notation.
 | 6 | `10_typed.sql` defines `clean` | DuckDB SQL, in process | `landed`, `quarantine` | `clean` view | `clean` is `landed` minus `quarantine` |
 | 7 | `10_typed.sql` unnests `clean` into eight entities | DuckDB SQL, in process | `clean` | 8 tables | Four nested columns flatten into child rows |
 | 8 | `20_curated.sql` defines eleven views | DuckDB SQL, in process | entities | views | Every business number lives here, and only here |
-| 9 | `22_gold.sql` builds seventeen dimensions, facts and metric views | DuckDB SQL, in process | entities, reference views | tables | The run grain, which a page load does not give |
-| 10 | `25_publish.sql` copies 24 relations to Parquet | `COPY` to local disk, push | views, tables | `warehouse/curated/*.parquet` | ZSTD compression |
+| 9 | `22_gold.sql` builds 26 tables and views: dimensions, facts and metric views | DuckDB SQL, in process | entities, reference views | tables | The run grain, which a page load does not give |
+| 10 | `25_publish.sql` copies 34 relations to Parquet | `COPY` to local disk, push | views, tables | `warehouse/curated/*.parquet` | ZSTD compression |
 | 11 | `30_load_postgres.py` loads twelve relations | libpq over TCP 55432, push | Parquet | PostgreSQL | An explicit relation list, no globbing |
 | 12 | `40_export.py` prints payloads in three formats | local file read, then stdout | Parquet | stdout, files | The exporter makes no network call |
 | 13 | The site queries the Parquet in the browser | HTTPS GET, then DuckDB WebAssembly in the tab, pull | Parquet | rendered page | The site holds no query the pipeline holds |
@@ -150,20 +150,23 @@ same data, so a wider range is possible in production.
 
 ### 3.2 Columns, by unit family
 
-The database carries no unit metadata. The units below come from the source
-named in the last column.
+The database carries no unit metadata. The `units` block of
+`contracts/flight_log.yml` records the unit of every numeric wire field, with the
+crow-archer file that sets it. `tests/test_contract.py` fails when a field has
+none. The table below groups the warehouse columns by that unit.
 
 | Unit | Columns | Type | Observed range | Source |
 |---|---|---|---|---|
-| Epoch milliseconds | `srv`, `wall`, `hello_srv`, `hello_wall`, `bye_srv`, `last_srv`, `prev_srv`, `drained_srv`, `events.timestamp` | BIGINT | 1788101912791 to 1788122382071 | Inferred. `srv / 1000` reads as 2026-08-30 22:39 UTC |
-| Milliseconds since page load | `perf` | BIGINT | 1072 to 17424492 | Inferred from magnitude |
-| Milliseconds | `spans.ms`, `spans.ms_max` | DOUBLE | 0.0025 to 6.1 | `20_curated.sql` names them |
+| Epoch milliseconds | `srv`, `wall`, `hello_srv`, `hello_wall`, `bye_srv`, `last_srv`, `prev_srv`, `drained_srv`, `events.timestamp` | BIGINT | 1788101912791 to 1788122382071 | Contract `units`. `srv / 1000` reads as 2026-08-30 22:39 UTC |
+| Milliseconds since page load | `perf`, `pulses.lastTs` | BIGINT | `perf` 1072 to 17424492 | Contract `units` |
+| Milliseconds | `spans.ms`, `spans.ms_max` | DOUBLE | 0.0025 to 6.1 | Contract `units` |
+| Seconds of simulation time | `pulses.t`, `blockers.frozen`, `blockers.dashing` | mixed | not measured | Contract `units` |
 | Seconds | `duration_s`, `gap_s`, `s_since_previous` | DOUBLE | 0.0 to 17424.0 | The suffix, and a division by 1000 in the SQL |
-| Count | `beats`, `alarms`, `errors`, `event_count`, `trace_frames`, `spans.frames`, `held_key_count`, `hp`, `kills`, `crows`, `skels`, `soldiers`, `arrows` | BIGINT | see 3.3 | Inferred |
+| Pixels | `blockers.x`, `blockers.y` | BIGINT | not measured | Contract `units` |
+| Count | `beats`, `alarms`, `errors`, `event_count`, `trace_frames`, `spans.frames`, `held_key_count`, `hp`, `kills`, `crows`, `skels`, `soldiers`, `arrows`, `pulses.held`, `beats.raf` | BIGINT | see 3.3 | Contract `units` for wire fields, the SQL for the rest |
 | Ordinal | `page_load_seq` | INTEGER | 1 to 6 | Contract invariant `page_load_opens_with_hello` |
-| Ordinal | `events.id` | BIGINT | 1 to 845 | Restarts at 1 on each page load |
+| Ordinal | `events.id`, `spans.event_id` | BIGINT | 1 to 845 | Restarts at 1 on each page load |
 | Ratio | `dpr` | BIGINT | 1 to 1 | Device pixel ratio |
-| Unknown | `pulses.t`, `pulses.lastTs`, `pulses.held`, `blockers.frozen`, `blockers.dashing`, `blockers.x`, `blockers.y`, `beats.raf` | mixed | see 3.4 | No source |
 
 ### 3.3 Caps and observed maxima
 
@@ -173,12 +176,12 @@ named in the last column.
 | `alarms.trace_frames` | 120 | `contract_caps` | 120 |
 | `spans.frames` | 120 | `contract_caps` | 120 |
 | events per `bye` | 100 | `contract_caps` | 1 |
-| logger ring capacity | 500 | `flight_log.yml` only | not measurable |
-| HTTP body bytes | 1000000 | `flight_log.yml` only | not measurable |
+| logger ring capacity | 500 | `contract_caps` | not measurable |
+| HTTP body bytes | 1000000 | `contract_caps` | not measurable |
 
-> **Warning.** `contract_caps` holds three of the five caps that
-> `contracts/flight_log.yml` declares. `logger_ring_capacity` and
-> `sink_body_bytes` never reach the database. No query can check them.
+> **Note.** `contract_caps` holds all five caps that `contracts/flight_log.yml`
+> declares. No column records the ring's occupancy or the size of a body, so no
+> query can test the last two against data.
 
 ### 3.4 Observed maximum length, VARCHAR columns
 
@@ -379,6 +382,7 @@ erDiagram
         bigint srv "epoch ms"
         varchar client_id FK
         varchar origin "alarm_trace or beat_trace"
+        bigint event_id "events.id, NULL on alarm rows"
         varchar span "enum, 6, in run order"
         double ms "milliseconds, mean"
         double ms_max "milliseconds, worst frame"
@@ -415,13 +419,12 @@ Each candidate key below ran a `count(*)` against a `count(DISTINCT ...)`.
 | `alarms` | `session_id`, `page_load_seq`, `srv` | 4 | 4 | yes |
 | `blockers` | `session_id`, `page_load_seq`, `srv` | 4 | 4 | yes |
 | `errors` | `session_id`, `page_load_seq`, `srv` | 2 | 2 | yes |
-| `spans` | `session_id`, `page_load_seq`, `srv`, `span`, `origin` | 5712 | 5694 | **no** |
+| `spans` | `session_id`, `page_load_seq`, `srv`, `origin`, `event_id`, `span` | 5712 | 5712 | yes |
 
-> **Warning.** `spans` has no primary key. One beat can drain two trace
-> summaries. Three beats did, so 18 rows collide. At `srv = 1788102057802` the
-> `hud` section appears twice, with `ms_max` 0.4 and 0.2. The two rows describe
-> different frame windows. Event ids 24 and 25 tell them apart, and `spans`
-> carries neither. Section 6 tracks the fix.
+> **Note.** One beat can drain two trace summaries, and three beats did. At
+> `srv = 1788102057802` the `hud` section appears twice, with `ms_max` 0.4 and
+> 0.2, from events 24 and 25. `event_id` keeps the two apart. An alarm carries
+> one trace and no event, so its rows leave `event_id` NULL and `srv` keys them.
 
 ### 4.3 Slowly changing dimensions
 
@@ -433,30 +436,39 @@ decide something that a reader may later need to reproduce?
 | `dim_character` | 2 | A run reads as "archer, starting character". Rewrite that line and the run reads differently |
 | `dim_boss` | 2 | Same argument. An encounter carries the boss description of its day |
 | `dim_contract_cap` | 2 | A record sits in quarantine because a cap said so. Move the cap and the decision stops being reproducible |
-| `dim_app_state` | 1 | `is_run_state` is arithmetic, not description, so versioning it needs a fact that joins as-of. Section 6 tracks that |
+| `dim_app_state` | 2 | `is_run_state` decides which pulses count as play time. `run_pulse` joins the version in force when each pulse arrived, so a reclassification changes only the runs after it |
 | `dim_mode` | 1 | Nothing published names a mode. A history here would hold rows nobody reads |
 
 `dim_character` and `dim_boss` share one table, `dim_member`, because both hold
 a key and a description. The dimension name is a column. Each keeps its own
 current-version table, so a metric view joins `dim_character` and never a
-filter. `reference_history` publishes every version of both, and
-`reference_governance` counts them per dimension for the Governance page.
+filter. `reference_history` publishes every version of both.
+`app_state_history` publishes every version of a run state, in its own file
+because a state carries two flags and a member carries a description.
+`reference_governance` counts all of them per dimension for the Governance page.
 
-**What `valid_from` means here.** It is transaction time. It records the moment
-the pipeline first saw the value, not the moment the value became true in the
-game. The reference CSVs carry a key and a note, and no dates, so no other
-reading is available from them.
+**What `valid_from` means here.** It is valid time, declared in the file that
+holds the value. A rebuild from an empty warehouse shows the same history. A
+member dates from the first crow-archer `master` commit whose `src/` names it. A
+cap dates from the commit that declared it in `contracts/flight_log.yml`. ADR
+0003 records why the two sources differ.
 
-That has one consequence, and stating it is cheaper than leaving a reader to
-find it. An as-of join against a fact's own timestamp is not supported. Every
-version starts after every fact in this warehouse, so such a join would resolve
-nothing. Facts join the current version instead, which is what `dim_character`
-already hands them.
+Every member predates every fact, so an as-of join against a fact's own
+timestamp resolves. `run_pulse` joins `dim_app_state` that way. Characters and
+bosses still reach a fact through the current version in `dim_character` and
+`dim_boss`.
 
-**Verified.** The four fixture sessions produce nine versioned members, each at
-version 1. `tests/test_versioned_dimensions.py` edits the playbook between two
-gold runs. It pins four cases: a changed description, a withdrawn member, a new
-member, and an untouched member that must stay at one row.
+**Verified.** Two builds from an empty warehouse produce the same nine members,
+fifteen run states and five caps, each at version 1.
+`tests/test_versioned_dimensions.py` declares a second history in a copy of the
+tree. It pins a changed description, a withdrawn member, a new member, and an
+untouched member that stays at one row.
+
+The same module reclassifies `talents` twice. Dated after the last fact, the
+change moves no run's play time. Dated before the first fact, it raises play
+time for the runs that spent time in `talents`.
+`tests/test_gold.py` finds exactly one version in force for every run and every
+boss encounter.
 
 ---
 
@@ -581,16 +593,16 @@ still add up. That is the point of the quarantine relation.
 
 | ID | Question or risk | Owner | Status |
 |---|---|---|---|
-| 1 | `spans` has no primary key. Add the source event id to the beat_trace branch | pipeline | Open, needs approval |
-| 2 | `logger_ring_capacity` and `sink_body_bytes` never reach `contract_caps` | pipeline | Open, needs approval |
-| 3 | `contracts/flight_log.yml` records no units. Add a `columns:` block | contract | Open, needs approval |
-| 4 | `beats.raf` has an undocumented origin and disagrees with `perf` | crow-archer | Open, external |
-| 5 | `pulses.t`, `pulses.lastTs` and `pulses.held` have no documented unit | crow-archer | Open, external |
-| 6 | `blockers.frozen`, `blockers.dashing`, `blockers.x` and `blockers.y` have no documented unit | crow-archer | Open, external |
+| 1 | `spans` had no primary key. It carries `event_id` now, and `tests/test_gold.py` pins the key | pipeline | Closed |
+| 2 | `logger_ring_capacity` and `sink_body_bytes` never reached `contract_caps`. Commit `536d4d1` carries all five caps, and `tests/test_contract.py` takes its cases from the YAML | pipeline | Closed |
+| 3 | `contracts/flight_log.yml` recorded no units. Its `units` block now covers every numeric wire field, and a test fails on a field without one | contract | Closed |
+| 4 | `beats.raf` disagreed with `perf`. The recorder source shows `raf` counts animation frames, and `perf` reads a clock in milliseconds | crow-archer | Closed |
+| 5 | `pulses.t`, `pulses.lastTs` and `pulses.held` had no documented unit. The `Pulse` type in the recorder documents all three | crow-archer | Closed |
+| 6 | `blockers.frozen`, `blockers.dashing`, `blockers.x` and `blockers.y` have no documented unit. The contract reads them from the game code: two timers that count down by `dt`, and the player position. crow-archer documents none of the four | crow-archer | Open, external |
 | 7 | `blockers.frozen` and `blockers.dashing` read 0 in every fixture row | fixtures | Open, no evidence |
 | 8 | Observed ranges come from 3 sessions. A wider range is likely | fixtures | Accepted |
-| 9 | `dim_app_state` stays Type 1. Reclassifying `is_run_state` rewrites `fact_run.sim_active_s` for every past run. A Type 2 here needs a surrogate key on the fact and a date the CSVs do not carry | pipeline | Open, needs approval |
-| 10 | `may_publish` governs `sessions.origin` and nothing else. A withheld origin that lands inside free text, such as `errors.msg`, would still reach the site. `tests/test_live_path.py` scans the published bytes for one, which catches it rather than preventing it | pipeline | Open, needs approval |
+| 9 | `dim_app_state` was Type 1, so reclassifying `is_run_state` rewrote `fact_run.sim_active_s` for every past run. It is Type 2 now, and `run_pulse` joins the version in force when each pulse arrived. ADR 0004 | pipeline | Closed |
+| 10 | `may_publish` governed `sessions.origin` and nothing else, so a withheld origin inside `errors.msg` reached the site. The live sanitizer now masks a withheld origin in every string except `href`, and `tests/test_live_path.py` searches every published value for one | pipeline | Closed |
 | 11 | A capture from `https://mrbisonte.github.io` was missing. PR #15 added one, recorded through the Fly sink with `?rec=1` | crow-archer | Closed |
 
 ---

@@ -55,6 +55,18 @@ def one(con, sql):
 # --------------------------------------------------------------------------
 # Grain
 # --------------------------------------------------------------------------
+def test_spans_is_unique_on_its_key():
+    """One beat can drain two trace summaries. Without event_id in the key, the
+    sections of the two land on the same row key and nothing tells them apart."""
+    path = (ROOT / "warehouse" / "curated" / "spans.parquet").as_posix()
+    rows, distinct = duckdb.connect().execute(f"""
+        SELECT count(*),
+               count(DISTINCT (session_id, page_load_seq, srv, origin, event_id, span))
+        FROM read_parquet('{path}')
+    """).fetchone()
+    assert rows == distinct
+
+
 def test_run_id_is_unique(con):
     rows, distinct = one(con, "SELECT count(*), count(DISTINCT run_id) FROM fact_run")
     assert rows == distinct
@@ -209,6 +221,33 @@ def test_contract_caps_are_type_two(con):
     closed_open, = one(con,
         "SELECT count(*) FROM cap_history WHERE NOT is_current AND valid_to IS NULL")
     assert closed_open == 0, "a superseded row must carry a valid_to"
+
+
+@pytest.mark.parametrize("fact, grain, key, dimension", [
+    ("fact_run", "run_id", "character_key", "character"),
+    ("fact_boss_encounter", "encounter_id", "boss_key", "boss"),
+])
+def test_every_fact_finds_the_version_in_force_when_it_started(con, fact, grain, key,
+                                                                dimension):
+    """The reference files declare when each version was valid, so a fact can
+    join the version in force at its own timestamp. Exactly one, not none and
+    not two. srv is epoch milliseconds."""
+    path = (CURATED / "reference_history.parquet").as_posix()
+    unresolved, = one(con, f"""
+        WITH matched AS (
+            SELECT f.{key}, count(h.version_seq) AS versions
+            FROM {fact} f
+            LEFT JOIN read_parquet('{path}') h
+                   ON h.dimension = '{dimension}'
+                  AND h.member_key = f.{key}
+                  AND to_timestamp(f.started_srv / 1000) >= h.valid_from
+                  AND to_timestamp(f.started_srv / 1000)
+                      < coalesce(h.valid_to, 'infinity'::TIMESTAMPTZ)
+            GROUP BY f.{grain}, f.{key}
+        )
+        SELECT count(*) FILTER (WHERE versions <> 1) FROM matched
+    """)
+    assert unresolved == 0
 
 
 # --------------------------------------------------------------------------

@@ -100,16 +100,20 @@ def test_ids_are_deterministic_across_runs(export, con):
 
 
 def test_span_id_collisions_are_reported_not_hidden(export, con):
-    """spans has no primary key, so some ids collide. Silence would be worse.
-
-    docs/hlad.md section 6 item 1 tracks the fix. Until it lands, the exporter
-    must keep saying how many rows are affected.
-    """
+    """A collision means two spans rows share a key. If one ever appears, the
+    exporter has to say how many rows it affects. Silence would be worse."""
     payload, collisions = export.build_otlp_traces(con)
     spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
     children = [s for s in spans if "parentSpanId" in s]
     distinct = len({s["spanId"] for s in children})
     assert collisions == len(children) - distinct
+
+
+def test_no_span_ids_collide(export, con):
+    """event_id splits the two trace summaries one beat can drain, so each one
+    becomes its own trace and no section appears twice inside one."""
+    _, collisions = export.build_otlp_traces(con)
+    assert collisions == 0
 
 
 def test_every_child_span_points_at_a_root_in_the_same_trace(export, con):
