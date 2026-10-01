@@ -61,8 +61,8 @@ display(html`<div class="grid grid-cols-3">
 </div>`);
 ```
 
-Zero superseded versions is the true reading, not a broken query. No reference
-value has moved since this warehouse first ran. The history exists so that the
+Every version is still current, because no reference value has changed since
+the warehouse first ran. The history exists so that the
 first move leaves a record, and `tests/test_versioned_dimensions.py` edits the
 playbook between two runs to prove that it does.
 
@@ -114,8 +114,9 @@ display(Inputs.table(history, {rows: 16, format: {valid_from: utc}, width: WIDTH
 
 ## 4. What the contract allowed
 
-A record sits in quarantine because a cap said so. Move the cap and that
-decision stops being reproducible, unless the old value survives. It does.
+Each quarantine decision depends on the cap in force at the time. The table
+keeps every past cap value this warehouse has seen, so an old decision stays
+reproducible after the cap changes.
 
 ```sql echo id=caps
 SELECT cap_key,
@@ -155,8 +156,11 @@ of the gap.
 
 ## What this page cannot tell you
 
-It cannot tell you what a run looked like under the playbook of its day.
-`valid_from` records when this pipeline learned a value, not when the value
-became true in the game. The reference files carry a key and a note, and no
-dates, so an as-of join against a run's own timestamp would resolve nothing.
-ADR 0002 records that cost and the two options rejected to accept it.
+`valid_from` records when the pipeline read a value, not when it changed in
+the game. The reference files carry no dates, so this page cannot show which values
+applied during a run.
+
+| Column | Records |
+|---|---|
+| `valid_from` | when the pipeline read the value |
+| *(none)* | when the value changed in the game |

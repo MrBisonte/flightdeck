@@ -130,8 +130,7 @@ display(Plot.plot({
 }));
 ```
 
-Eight rows is eight rows. The sample is what it is, and the bar chart says so
-without a caption.
+The sample is ${board.numRows} rows, and the chart plots each of them.
 
 ## 2. What did the run look like, second by second?
 
@@ -353,10 +352,10 @@ the character design showing up in the telemetry.
 
 ## 4. Do the counter and the events agree?
 
-Two claims about the same fact meet the moment a leaderboard exists. The HUD
-counter rides on every pulse. The kill events ride on the event ring. They
-agree on six runs and disagree on two, and the two are the only runs that
-walked into a second map.
+The recorder counts kills twice: the HUD counter on every pulse, and kill
+events in the event ring. A leaderboard would have to choose one. They
+agree on ${agree} runs and disagree on ${disagree}. The runs that disagree are
+the only ones that walked into a second map.
 
 ```sql echo id=recon
 SELECT run_id,
@@ -368,6 +367,11 @@ SELECT run_id,
        agrees
 FROM kill_reconciliation
 ORDER BY event_kills DESC
+```
+
+```js
+const agree = Array.from(recon).filter((r) => r.agrees).length;
+const disagree = recon.numRows - agree;
 ```
 
 ```js

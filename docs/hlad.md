@@ -591,7 +591,7 @@ still add up. That is the point of the quarantine relation.
 | 8 | Observed ranges come from 3 sessions. A wider range is likely | fixtures | Accepted |
 | 9 | `dim_app_state` stays Type 1. Reclassifying `is_run_state` rewrites `fact_run.sim_active_s` for every past run. A Type 2 here needs a surrogate key on the fact and a date the CSVs do not carry | pipeline | Open, needs approval |
 | 10 | `may_publish` governs `sessions.origin` and nothing else. A withheld origin that lands inside free text, such as `errors.msg`, would still reach the site. `tests/test_live_path.py` scans the published bytes for one, which catches it rather than preventing it | pipeline | Open, needs approval |
-| 11 | No capture from `https://mrbisonte.github.io` exists yet. The recorder ships in a release build on a crow-archer branch, and that branch is not deployed, so every claim about the published origin rests on a synthetic capture | crow-archer | Open, external |
+| 11 | A capture from `https://mrbisonte.github.io` was missing. PR #15 added one, recorded through the Fly sink with `?rec=1` | crow-archer | Closed |
 
 ---
 
