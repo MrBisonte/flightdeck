@@ -32,6 +32,36 @@ Record what changed and why. Nothing else.
 - Conventional Commits, terse, same rules as the body. A title, then a short
   paragraph of what changed and why.
 
+## Integration PR
+One PR lands several branches together. Each branch keeps its own PR with the
+full description, and the integration PR indexes them.
+
+| Part | Rule |
+|---|---|
+| Branches | Stacked in merge order, each cut from the one before |
+| Branch PRs | One per branch, full body, base is the branch before |
+| Integration PR | Head is the tip of the stack, base is `main` |
+| Title | `type: integrate <round>, #first to #last` |
+| Body | One sentence: what lands, in which order. A table, one row per PR. One line for an outcome that spans PRs |
+| Table row | The change, in one line. A decision record is named, not restated |
+| Verification | Stays in the branch PRs. CI runs on the integration PR |
+| After opening | Close each branch PR with a comment: `Included in #N` |
+| Merge | Once, with a merge commit, so each branch commit stays in `git log` |
+| A branch PR already merged | Named in the opening sentence, left out of the table |
+
+Body:
+```
+Lands #22 to #29 in order. #21 is already on `main`. Each row links the full description.
+
+| PR | Change |
+|---|---|
+| #22 | Reference files declare `valid_from`, so history survives a fresh build. ADR 0003 |
+| #23 | Run states are Type 2, and `run_pulse` joins them as-of. ADR 0004 |
+| #25 | `spans.event_id` keys `spans`. Export span id collisions: 0 |
+
+HLAD risks closed: 1, 9.
+```
+
 ## Example
 
 Title: `fix: recorder no-frames alarm fires on static screens`
