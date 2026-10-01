@@ -58,7 +58,7 @@ display(html`<div class="grid grid-cols-3">
 
 ## 2. How long is a run?
 
-Two clocks again, and they disagree on purpose. Wall time counts every second
+A run has two durations, and they differ by design. Wall time counts every second
 of the run. Play time counts only the states where the simulation advances, so
 it excludes the talent tree, the pause overlay and the stage transitions.
 `app_states.csv` decides which states are which, not the pipeline.
@@ -173,8 +173,8 @@ display(html`<div class="grid grid-cols-3">
 </div>`);
 ```
 
-Those three cards add up the column above them. They introduce no number the
-query did not already return.
+The three cards are totals of three columns in the table above, so they add no
+new data.
 
 ## 5. How do runs end?
 

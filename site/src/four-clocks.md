@@ -61,7 +61,7 @@ splits them and the page prints what it is given.
 
 ## 2. Gaps between arrivals
 
-A beat arrives every second. A gap of more than three seconds is worth a look. The pipeline measures the gap on `srv`, so the page cannot hide it.
+A beat arrives every second. The pipeline reports every gap longer than three seconds, measured on `srv` so the page cannot hide it.
 
 ```sql echo id=gaps
 SELECT session_id,
@@ -75,7 +75,7 @@ ORDER BY gap_s
 ```js
 Plot.plot({
   title: `${gaps.numRows} gaps longer than three seconds, on the server clock`,
-  subtitle: "A hidden tab has its one second timer clamped to about sixty seconds. That is the cluster on the line.",
+  subtitle: "The recorder sends one beat per second. In a hidden tab the browser limits that timer to about once a minute, so most gaps sit on the line at 60 seconds.",
   marginLeft: 180,
   x: {type: "log", label: "gap (seconds), log scale", grid: true},
   y: {label: null},
