@@ -10,21 +10,21 @@ Each claim on this page maps to one of three things:
 
 ## Claims and evidence
 
-| Competency | CV claim | Repo | Artifact | Command | Fallback |
+| Competency | Claim | Repo | Artifact | Command | Fallback |
 |---|---|---|---|---|---|
-| Lakehouse, open formats | "open lakehouse formats, Apache Parquet, Apache Iceberg, Apache Arrow, Hive partitioned object storage" | flightdeck | `warehouse/raw/session_date=*/session_id=*/` | `./demo.sh raw` | Screenshot of the tree |
-| De-vendoring the analytics path | "Re-engineered proprietary warehouse aggregations into an open lakehouse format ... queryable from an embedded engine" | flightdeck | Every layer reads Parquet. No warehouse sits in the middle | `./demo.sh publish` | `ls warehouse/curated` |
-| Governance, data contracts | "typed data contracts, governance as code, data quality and lineage" | flightdeck | `contracts/flight_log.yml`, the `contract_caps` table, `quarantine` | `./demo.sh typed` | The reconciliation table |
-| Documentation levels | "architecture documentation at conceptual, logical and physical levels" | crow-archer, flightdeck | `monitored-playtest.md`, `docs/architecture.md` | Open either page | Printed copy |
-| Data engineering, ELT | "metadata driven ETL and ELT engines, data pipelines" | quacknettor | `configs/pipelines.yml`, config driven adapters | Open the config | The README |
-| Performance engineering | "performance engineering at query, parameter and OS level" | flightdeck | `frame_time_by_span`, over 5688 measurements | `./demo.sh curated` | The terminal cast |
-| Snowflake | "Snowflake (SnowPro Core certified)" | quacknettor | The Snowflake adapter. `COPY INTO` reads the same Parquet | Documented only | The documented path |
-| Typed layer for consumers | "typed data layers for downstream AI consumption" | flightdeck | `session_context`, one typed row per page load | `./demo.sh export` | The printed payload |
-| Conformed dimensions | "data quality", "metadata driven ETL" | flightdeck | `fixtures/reference/` joined to the telemetry | `./demo.sh curated` | The coverage table |
-| Slowly changing dimensions | "data quality and lineage" | flightdeck | `dim_member`, Type 2 on characters and bosses with dates declared in the source (ADR 0003), and ADR 0002 for the two that stay Type 1 | `./demo.sh gold` | `reference_history` |
-| Data minimization | "GDPR compliant design in regulated European industries" | flightdeck | `sanitize_flightlog.py`, `SANITIZATION.md` | `python scripts/sanitize_flightlog.py --check fixtures/raw` | The change table |
-| CI and test gating | "CI/CD with automated test gating on every change" | all three | GitHub Actions. 98 tests. CI gates the reconciliation | Open the Actions tab | The badge |
-| Evidence based decisions | "shipping working proofs of concept before asking for investment" | crow-archer, flightdeck | `incident_timeline`, then the stack, then PR 42 | `./demo.sh curated` | The log excerpt |
+| Lakehouse, open formats | Raw telemetry lands as Hive partitioned Parquet | flightdeck | `warehouse/raw/session_date=*/session_id=*/` | `./demo.sh raw` | Screenshot of the tree |
+| Embedded analytics on open files | An embedded engine queries the curated Parquet in place | flightdeck | Every layer reads Parquet. No warehouse sits in the middle | `./demo.sh publish` | `ls warehouse/curated` |
+| Governance, data contracts | A typed schema defines each record, and rows that break it go to quarantine | flightdeck | `contracts/flight_log.yml`, the `contract_caps` table, `quarantine` | `./demo.sh typed` | The reconciliation table |
+| Documentation levels | Architecture pages that go from one system picture down to each table | crow-archer, flightdeck | `monitored-playtest.md`, `docs/architecture.md` | Open either page | Printed copy |
+| Data engineering, ELT | Config, not code, defines each pipeline | quacknettor | `configs/pipelines.yml`, config driven adapters | Open the config | The README |
+| Performance engineering | Frame time by span, each percentile with its sample count | flightdeck | `frame_time_by_span`, over 5688 measurements | `./demo.sh curated` | The terminal cast |
+| Snowflake | The same Parquet loads into Snowflake. Documented, not run | quacknettor | The Snowflake adapter. `COPY INTO` reads the same Parquet | Documented only | The documented path |
+| Typed layer for consumers | A typed layer that downstream consumers read | flightdeck | `session_context`, one typed row per page load | `./demo.sh export` | The printed payload |
+| Conformed dimensions | Shared reference dimensions, with their coverage reported | flightdeck | `fixtures/reference/` joined to the telemetry | `./demo.sh curated` | The coverage table |
+| Slowly changing dimensions | Dimension history survives a fresh build | flightdeck | `dim_member`, Type 2 on characters and bosses with dates declared in the source (ADR 0003), and ADR 0002 for the two that stay Type 1 | `./demo.sh gold` | `reference_history` |
+| Data minimization | The committed logs carry no real user agent and no real origin. A check enforces it | flightdeck | `sanitize_flightlog.py`, `SANITIZATION.md` | `python scripts/sanitize_flightlog.py --check fixtures/raw` | The change table |
+| CI and test gating | CI tests every change | all three | GitHub Actions. 98 tests. CI gates the reconciliation | Open the Actions tab | The badge |
+| Evidence based decisions | Decisions follow recorded evidence, from the alarm to the fix | crow-archer, flightdeck | `incident_timeline`, then the stack, then PR 42 | `./demo.sh curated` | The log excerpt |
 
 ## The numbers
 
@@ -104,7 +104,7 @@ The test suite proves the quarantine catches more than that one case:
 
 ### Gap 4: one source, not many
 
-The CV claims multi source ingestion.
+The pipeline reads two sources.
 
 | Source | Present here? |
 |---|---|
@@ -112,8 +112,7 @@ The CV claims multi source ingestion.
 | Reference dimensions | yes |
 | Anything else | no |
 
-duckEL carries the PostgreSQL, Snowflake, S3, and Parquet adapters. The day job
-holds the genuinely multi source work. Nobody can show that work.
+duckEL carries the PostgreSQL, Snowflake, S3, and Parquet adapters.
 
 **Position:** two sources here. Name the limit first.
 
