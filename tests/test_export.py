@@ -1,8 +1,8 @@
 """The export payloads must satisfy the specs they claim to follow.
 
-pipeline/40_export.py emits three wire formats. Two of them are open specs with
-rules a backend enforces on arrival, so the rules belong in a test rather than
-in a comment. The third is a vendor shape kept for comparison.
+pipeline/40_export.py emits two wire formats. Both are open specs with rules a
+backend enforces on arrival, so the rules belong in a test rather than in a
+comment.
 
 The two rules that caught real defects while writing this file:
 
@@ -13,10 +13,10 @@ The two rules that caught real defects while writing this file:
 These tests read the published Parquet. They skip when it is missing, because
 a checkout without a build has nothing to export.
 """
-import datetime as dt
-import importlib.util
 import pathlib
 import re
+import runpy
+import types
 
 import pytest
 
@@ -29,18 +29,10 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def load_module():
-    """Import the exporter by path. Its name starts with a digit."""
-    path = ROOT / "pipeline" / "40_export.py"
-    spec = importlib.util.spec_from_file_location("flightdeck_export", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 @pytest.fixture(scope="module")
 def export():
-    return load_module()
+    """The exporter, run by path because its name starts with a digit."""
+    return types.SimpleNamespace(**runpy.run_path(str(ROOT / "pipeline" / "40_export.py")))
 
 
 @pytest.fixture(scope="module")
@@ -55,16 +47,6 @@ def con(export):
 def test_epoch_millis_convert_to_exact_nanoseconds(export):
     """An epoch millisecond count scales by exactly one million."""
     assert export._nanos(1788101938203) == "1788101938203000000"
-
-
-def test_datetime_nanoseconds_keep_every_digit(export):
-    """A float64 cannot hold nanoseconds at this magnitude. Integers can.
-
-    This is the regression: value.timestamp() * 1e9 returned
-    1788101938203000064, inventing 64 nanoseconds that no clock measured.
-    """
-    when = dt.datetime.fromtimestamp(1788101938.203, tz=dt.timezone.utc)
-    assert export._nanos(when) == "1788101938203000000"
 
 
 def test_otlp_log_timestamps_are_digit_strings(export, con):
@@ -158,7 +140,6 @@ def test_cloudevent_ids_are_unique(export, con):
     ("otlp", "all", ["otlp-logs", "otlp-traces", "otlp-metrics"]),
     ("otlp", "logs", ["otlp-logs"]),
     ("cloudevents", "all", ["cloudevents"]),
-    ("posthog", "all", ["posthog"]),
 ])
 def test_each_format_builds_the_payloads_it_promises(export, con, fmt, signal, stems):
     payloads, _ = export.build(con, fmt, signal)

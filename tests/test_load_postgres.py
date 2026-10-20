@@ -11,9 +11,10 @@ plus a hint that names a command which exists.
 """
 from __future__ import annotations
 
-import importlib.util
 import pathlib
+import runpy
 import subprocess
+import types
 
 import pytest
 
@@ -22,12 +23,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 @pytest.fixture(scope="module")
 def loader():
-    """The load step, imported by path because its name starts with a digit."""
-    path = ROOT / "pipeline" / "30_load_postgres.py"
-    spec = importlib.util.spec_from_file_location("flightdeck_loader", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    """The load step, run by path because its name starts with a digit."""
+    return types.SimpleNamespace(**runpy.run_path(str(ROOT / "pipeline" / "30_load_postgres.py")))
 
 
 def fake_run(script, calls):

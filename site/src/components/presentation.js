@@ -12,6 +12,8 @@
  *
  * The switch changes one attribute on <html>. It never touches the data, so
  * both views always show the same figures. presentation.css does the rest.
+ *
+ * The two views are an experiment, see ROADMAP.md.
  */
 (function () {
   var KEY = "flightdeck:view";

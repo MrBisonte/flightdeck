@@ -79,10 +79,13 @@ require python "install Python 3.9 or newer"
 
 mkdir -p warehouse/curated
 
+# The one gate list. CI runs this step rather than its own copy of it.
 run_check () {
-  banner "Contract, sanitization gate"
+  banner "Checks: credentials, sanitization, docs, tests"
+  bash scripts/scan_secrets.sh
   python scripts/sanitize_flightlog.py --check fixtures/raw
-  python scripts/check_ste.py README.md docs/*.md fixtures/SANITIZATION.md fixtures/reference/README.md
+  python scripts/check_ste.py README.md ROADMAP.md docs/*.md docs/adr/*.md docs/qa/*.md \
+    fixtures/SANITIZATION.md fixtures/reference/README.md site/src/*.md
   python -m pytest tests/ -q
   done_in
 }
@@ -145,7 +148,7 @@ run_load () {
 }
 
 run_export () {
-  banner "Export, the same files in three wire formats. Dry run"
+  banner "Export, the same files in two wire formats. Dry run"
   python pipeline/40_export.py
   done_in
 }
@@ -161,7 +164,8 @@ case "$what" in
   load)    run_load ;;
   export)  run_export ;;
   build)   run_raw; run_typed; run_curated; run_gold; run_publish ;;
-  all)     run_check; run_raw; run_typed; run_curated; run_gold; run_publish; run_load; run_export ;;
+  # check after publish: the gold and export tests read the published Parquet.
+  all)     run_raw; run_typed; run_curated; run_gold; run_publish; run_check; run_load; run_export ;;
   *)       echo "unknown step: $what" >&2; sed -n '2,9p' "$0" >&2; exit 2 ;;
 esac
 

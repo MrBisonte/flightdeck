@@ -7,7 +7,8 @@ reads exactly what a Snowflake COPY INTO or any other consumer would read.
 If the Docker daemon is not running, the load degrades to a local target with an
 identical schema instead of failing. A live demo should not die because a daemon
 was not started, and the fallback is announced loudly rather than hidden, so
-nobody watching mistakes it for the real thing.
+nobody watching mistakes it for the real thing. The fallback is an experiment,
+see ROADMAP.md.
 """
 from __future__ import annotations
 
@@ -29,13 +30,6 @@ SCHEMA = "curated"
 #: Pinned in docker-compose.yml, so it is the one name both files agree on.
 CONTAINER = "flightdeck-pg"
 
-#: Relation name -> Parquet file. Quarantine ships alongside the clean data so a
-#: consumer can always see how much was held back.
-RELATIONS = [
-    "session_summary", "session_context", "frame_time_by_span", "alarms_by_class",
-    "clock_skew", "srv_gaps", "gap_explained", "loss_accounting",
-    "dimension_coverage", "error_report", "incident_timeline", "quarantine",
-]
 
 
 class LoadError(RuntimeError):
@@ -100,20 +94,25 @@ def start_postgres() -> None:
     )
 
 
-def missing_parquet() -> list[str]:
-    return [r for r in RELATIONS if not (CURATED / f"{r}.parquet").exists()]
+def relations() -> list[str]:
+    """Every relation the publish step wrote, one per Parquet file.
+
+    Read from the directory, not kept as a list here, so the load carries what
+    25_publish.sql publishes and nothing else. A list drifts: it held 12 of 34.
+    """
+    return sorted(p.stem for p in CURATED.glob("*.parquet"))
 
 
 def load(con: duckdb.DuckDBPyConnection, target: str, label: str) -> list[tuple[str, int]]:
     """Copy every curated relation into target. Returns (relation, rows)."""
     loaded = []
-    for name in RELATIONS:
+    for name in relations():
         source = (CURATED / f"{name}.parquet").as_posix()
         con.execute(f"DROP TABLE IF EXISTS {target}.{name}")
         con.execute(f"CREATE TABLE {target}.{name} AS SELECT * FROM read_parquet('{source}')")
         rows = con.execute(f"SELECT count(*) FROM {target}.{name}").fetchone()[0]
         loaded.append((name, rows))
-        print(f"  {name:<22} {rows:>6} rows -> {label}")
+        print(f"  {name:<24} {rows:>6} rows -> {label}")
     return loaded
 
 
@@ -123,9 +122,8 @@ def main() -> int:
                         help="skip Docker entirely and load the local target")
     args = parser.parse_args()
 
-    absent = missing_parquet()
-    if absent:
-        print("FAIL: curated Parquet is missing: " + ", ".join(absent), file=sys.stderr)
+    if not relations():
+        print(f"FAIL: no curated Parquet under {CURATED}.", file=sys.stderr)
         print("Hint: run the raw, typed, curated and publish steps first "
               "(./demo.sh build).", file=sys.stderr)
         return 1

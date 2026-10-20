@@ -25,8 +25,7 @@ at either hop reads as a mismatch in the `verdict` column. A plausible smaller
 number never passes.
 
 `postgres_rows` is empty for a relation the load step does not carry. It loads
-the twelve curated relations and no gold relation, which the column shows
-without needing a note.
+every published relation, so the column is empty for an unpublished one.
 
 `empty` is a separate column from `verdict`, on purpose. A count that disagrees
 is always a defect. A relation with no rows is a property of the input. One

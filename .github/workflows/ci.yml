@@ -4,6 +4,14 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # Weekly, Monday 06:00 UTC. Daily: '0 6 * * *'. Monthly: '0 6 1 * *'.
+    # GitHub Actions allows no expression here, so this line is the one knob.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -29,20 +37,15 @@ jobs:
           unzip -q -d /usr/local/bin /tmp/duckdb.zip
           duckdb --version
 
-      - name: Tests
-        run: python -m pytest tests/ -q
-
-      - name: Credential scan
-        run: bash scripts/scan_secrets.sh
-
-      - name: Docs follow Simplified Technical English
-        run: python scripts/check_ste.py README.md docs/*.md docs/adr/*.md docs/qa/*.md fixtures/SANITIZATION.md fixtures/reference/README.md site/src/*.md
-
-      - name: Fixtures are sanitized
-        run: python scripts/sanitize_flightlog.py --check fixtures/raw
-
       - name: Pipeline runs end to end
         run: ./demo.sh build
+
+      # demo.sh holds the gate list, so CI and a local check cannot drift apart.
+      # After the build, never before it. test_gold.py and test_export.py read
+      # the published Parquet and skip when it is missing, so a run before the
+      # build reports green with 56 tests that never ran.
+      - name: Checks and tests
+        run: ./demo.sh check
 
       - name: Contract reconciles
         run: |
@@ -65,5 +68,69 @@ jobs:
       - name: Published Parquet matches the warehouse
         run: python scripts/qa_evidence.py --no-postgres --out docs/qa/ci-check.csv
 
+      # Framework pre-bundles its recommended libraries into client.js on
+      # every build, each at @latest, whether or not the site imports them.
+      # Restoring its npm cache means the build resolves nothing over the
+      # network. resolveNpmVersion reads the directory names here and returns a
+      # satisfying version before it asks registry.npmjs.org, and
+      # populateNpmCache returns the path it already holds on disk.
+      #
+      # The key is constant on purpose. It restores on every run and saves only
+      # when it misses, so the versions stay put until someone bumps the
+      # suffix to ask for a refresh.
+      - name: Restore the Framework npm cache
+        uses: actions/cache@v6
+        with:
+          path: site/src/.observablehq/cache/_npm
+          key: observable-npm-v1
+
+      # The site loader runs ./demo.sh build itself, so the published pages read
+      # the Parquet this run produced.
+      #
+      # Three attempts. A deploy died on `read ECONNRESET` while the build
+      # fetched a package from a CDN, and a re-run with no change fixed it. A
+      # shell loop rather than a marketplace action, because a loop adds no
+      # dependency.
       - name: Site builds from the pipeline output
-        run: npm ci --prefix site && npm run build --prefix site
+        run: |
+          npm ci --prefix site
+          for attempt in 1 2 3; do
+            if npm run build --prefix site; then exit 0; fi
+            echo "site build attempt $attempt failed"
+            [ "$attempt" = 3 ] || sleep $((attempt * 15))
+          done
+          exit 1
+
+      # The deploy job publishes this artifact, so the site that goes live is
+      # the one this job built and tested.
+      - if: github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site/dist
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # GitHub Pages needs both. A free personal plan also needs the repository
+    # to be public: until then this job fails and the test job still passes.
+    permissions:
+      pages: write
+      id-token: write
+    # One deployment at a time. A run in progress finishes rather than being cut off.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # enablement turns Pages on for the repository the first time this runs,
+      # so nobody has to find the setting by hand. It needs a repository that
+      # can serve Pages at all, which a free account means public.
+      - uses: actions/configure-pages@v6
+        with:
+          enablement: true
+
+      - id: deployment
+        uses: actions/deploy-pages@v5

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export curated telemetry in three wire formats. Dry run only.
+"""Export curated telemetry in two wire formats. Dry run only.
 
 The point of this file is to show one curated layer serving many consumers with
 no second pipeline behind it. PostgreSQL gets relational tables from the same
@@ -13,8 +13,6 @@ Formats, in the order a backend usually prefers them:
   otlp         OpenTelemetry OTLP/HTTP with JSON encoding. Signals: logs,
                traces, metrics. Default port 4318, paths /v1/logs, /v1/traces
                and /v1/metrics, Content-Type application/json.
-  posthog      The original vendor capture shape, kept so the "one layer, many
-               consumers" claim has more than one consumer in it.
 
 Both open formats are plain JSON over HTTP, so this file needs no dependency
 beyond the duckdb already in requirements.txt. Protobuf and gRPC are the other
@@ -42,6 +40,7 @@ import hashlib
 import json
 import pathlib
 import sys
+import time
 
 import duckdb
 
@@ -50,6 +49,9 @@ CURATED = ROOT / "warehouse" / "curated"
 
 # The service every payload claims to come from. One string, one home.
 SERVICE_NAME = "flightdeck"
+
+# CloudEvents time is RFC 3339. Counting from this keeps the arithmetic integer.
+EPOCH = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
 
 # OTLP SeverityNumber, from the logs data model. Only the levels this data uses.
 SEVERITY = {"INFO": 9, "WARN": 13, "ERROR": 17}
@@ -67,22 +69,17 @@ def _hex_id(*parts: object, nbytes: int) -> str:
     return hashlib.sha256(material).digest()[:nbytes].hex()
 
 
-def _nanos(value: object) -> str:
-    """Convert a timestamp or an epoch millisecond count to OTLP nanoseconds.
+def _nanos(epoch_ms: int) -> str:
+    """Convert an epoch millisecond count to OTLP nanoseconds.
 
     proto3 JSON maps 64 bit integers to strings, so the return type is str and
     not int. A backend that reads this as a number will lose precision.
+
+    Integer arithmetic, never a float. A float64 cannot hold nanoseconds since
+    1970 at this magnitude, and rounds the last three digits. This project is
+    about clocks, so a clock it invents is worse than no clock at all.
     """
-    if isinstance(value, dt.datetime):
-        # Integer arithmetic, not value.timestamp() * 1e9. A float64 cannot hold
-        # nanoseconds since 1970 at this magnitude, and rounds the last three
-        # digits. This project is about clocks, so a clock it invents is worse
-        # than no clock at all.
-        delta = value - dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
-        return str(delta.days * 86_400_000_000_000
-                   + delta.seconds * 1_000_000_000
-                   + delta.microseconds * 1_000)
-    return str(int(value) * 1_000_000)
+    return str(int(epoch_ms) * 1_000_000)
 
 
 def _attrs(pairs: dict) -> list[dict]:
@@ -108,9 +105,17 @@ def _resource() -> dict:
 
 
 def _rows(con: duckdb.DuckDBPyConnection, relation: str) -> list[dict]:
-    """Read one published Parquet file as a list of dicts."""
-    path = (CURATED / f"{relation}.parquet").as_posix()
-    cur = con.execute(f"SELECT * FROM read_parquet('{path}')")
+    """Read one published Parquet file as a list of dicts.
+
+    A TIMESTAMP WITH TIME ZONE arrives as epoch milliseconds. As a datetime it
+    would make the DuckDB driver import pytz, and it would carry the time zone
+    of whichever machine ran the export.
+    """
+    source = f"read_parquet('{(CURATED / f'{relation}.parquet').as_posix()}')"
+    columns = [f'epoch_ms("{name}") AS "{name}"' if kind == "TIMESTAMP WITH TIME ZONE"
+               else f'"{name}"'
+               for name, kind, *_ in con.execute(f"DESCRIBE SELECT * FROM {source}").fetchall()]
+    cur = con.execute(f"SELECT {', '.join(columns)} FROM {source}")
     names = [d[0] for d in cur.description]
     return [dict(zip(names, row)) for row in cur.fetchall()]
 
@@ -247,7 +252,7 @@ def build_otlp_traces(con: duckdb.DuckDBPyConnection) -> tuple[dict, int]:
 # OTLP metrics. Source: the four relations that already hold a number.
 # ---------------------------------------------------------------------------
 def build_otlp_metrics(con: duckdb.DuckDBPyConnection) -> dict:
-    now = _nanos(dt.datetime.now(dt.timezone.utc))
+    now = str(time.time_ns())
     metrics: list[dict] = []
 
     def gauge(name: str, unit: str, points: list[tuple[float, dict]]) -> None:
@@ -324,7 +329,7 @@ def build_cloudevents(con: duckdb.DuckDBPyConnection) -> list[dict]:
     for row in _rows(con, "error_report"):
         event("client.error",
               (row["session_id"], row["page_load_seq"], row["msg"]),
-              row["arrived"].isoformat(),
+              (EPOCH + dt.timedelta(milliseconds=row["arrived"])).isoformat(),
               {"message": row["msg"], "top_frame": row["top_frame"],
                "location": row["top_location"]},
               subject=f"{row['session_id']}#{row['page_load_seq']}")
@@ -334,45 +339,6 @@ def build_cloudevents(con: duckdb.DuckDBPyConnection) -> list[dict]:
               {"class": row["class"], "count": row["n"],
                "page_loads": row["page_loads"],
                "states_when_raised": list(row["states_when_raised"] or [])})
-
-    return events
-
-
-# ---------------------------------------------------------------------------
-# The original vendor capture shape, unchanged in meaning.
-# ---------------------------------------------------------------------------
-def build_posthog(con: duckdb.DuckDBPyConnection) -> list[dict]:
-    events: list[dict] = []
-
-    for row in _rows(con, "session_summary"):
-        events.append({
-            "event": "session_completed",
-            "distinct_id": row["client_id"],
-            "properties": {
-                "duration_s": row["duration_s"], "outcome": row["outcome"],
-                "final_state": row["final_state"], "kills": row["kills"],
-                "hp_first": row["hp_first"], "hp_last": row["hp_last"],
-                "alarm_count": row["alarms"], "error_count": row["errors"],
-                "beat_count": row["beats"], "browser": row["ua"],
-            },
-        })
-
-    for row in _rows(con, "error_report"):
-        events.append({
-            "event": "client_error",
-            "distinct_id": f"{row['session_id']}#{row['page_load_seq']}",
-            "timestamp": row["arrived"].isoformat(),
-            "properties": {"message": row["msg"], "top_frame": row["top_frame"],
-                           "location": row["top_location"]},
-        })
-
-    for row in _rows(con, "alarms_by_class"):
-        events.append({
-            "event": "alarm_summary",
-            "distinct_id": "aggregate",
-            "properties": {"class": row["class"], "count": row["n"],
-                           "page_loads": row["page_loads"]},
-        })
 
     return events
 
@@ -398,14 +364,10 @@ def build(con: duckdb.DuckDBPyConnection, fmt: str, signal: str) -> tuple[list[d
             payloads.append({"stem": "otlp-metrics", "path": "/v1/metrics",
                              "media": "application/json",
                              "body": build_otlp_metrics(con)})
-    elif fmt == "cloudevents":
+    else:
         payloads.append({"stem": "cloudevents", "path": "(ingest endpoint)",
                          "media": "application/cloudevents-batch+json",
                          "body": build_cloudevents(con)})
-    else:
-        payloads.append({"stem": "posthog", "path": "/batch/",
-                         "media": "application/json",
-                         "body": build_posthog(con)})
 
     return payloads, collisions
 
@@ -426,7 +388,7 @@ def _count(body: object) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--format", choices=("otlp", "cloudevents", "posthog"),
+    parser.add_argument("--format", choices=("otlp", "cloudevents"),
                         default="otlp", help="wire format (default otlp)")
     parser.add_argument("--signal", choices=("logs", "traces", "metrics", "all"),
                         default="all", help="OTLP signal, ignored otherwise")

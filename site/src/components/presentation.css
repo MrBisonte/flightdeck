@@ -16,6 +16,8 @@
  *
  * One set of token names, two blocks. Every rule below reads the names, so a
  * palette change touches the two blocks and nothing else.
+ *
+ * The two views are an experiment, see ROADMAP.md.
  */
 
 /* ---- Engineering, the instrument panel ---------------------------------- */

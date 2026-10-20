@@ -13,7 +13,6 @@ definitions. Prose is the target, not data.
 
 Usage
     check_ste.py FILE [FILE ...]      report problems
-    check_ste.py --max-words N FILE   change the sentence limit
 """
 from __future__ import annotations
 
@@ -69,19 +68,9 @@ def prose_lines(text: str) -> list[tuple[int, str]]:
             continue
         if in_code:
             continue
-        if not stripped:
-            out.append((n, ""))               # blank: a paragraph boundary
-            continue
-        if stripped.startswith("#"):          # heading
-            out.append((n, ""))
-            continue
-        if stripped.startswith("|"):          # table
-            out.append((n, ""))
-            continue
-        if stripped.startswith(">"):          # quote
-            out.append((n, ""))
-            continue
-        if set(stripped) <= set("-|: "):      # table rule
+        # A blank line, a heading, a table row, a quote or a table rule is not
+        # prose, and it ends the paragraph above it.
+        if not stripped or stripped[0] in "#|>" or set(stripped) <= set("-|: "):
             out.append((n, ""))
             continue
         # A list item starts its own paragraph. Its continuation lines stay
@@ -126,7 +115,7 @@ def paragraphs(text: str) -> list[tuple[int, str]]:
     return out
 
 
-def check(path: pathlib.Path, max_words: int) -> list[str]:
+def check(path: pathlib.Path) -> list[str]:
     text = path.read_text(encoding="utf-8")
     problems: list[str] = []
 
@@ -141,10 +130,10 @@ def check(path: pathlib.Path, max_words: int) -> list[str]:
 
         for sentence in found:
             count = word_count(sentence)
-            if count > max_words:
+            if count > MAX_WORDS:
                 preview = sentence[:70].rstrip()
                 problems.append(
-                    f"{path}:{line_no}: {count} words (limit {max_words}): {preview}..."
+                    f"{path}:{line_no}: {count} words (limit {MAX_WORDS}): {preview}..."
                 )
 
             for match in PASSIVE.finditer(sentence):
@@ -160,19 +149,13 @@ def check(path: pathlib.Path, max_words: int) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("files", nargs="+", type=pathlib.Path)
-    parser.add_argument("--max-words", type=int, default=MAX_WORDS)
-    parser.add_argument("--quiet", action="store_true",
-                        help="print the count only")
     args = parser.parse_args()
 
-    all_problems: list[str] = []
-    for path in args.files:
-        all_problems.extend(check(path, args.max_words))
+    all_problems = [problem for path in args.files for problem in check(path)]
 
     if all_problems:
-        if not args.quiet:
-            for problem in all_problems:
-                print(problem)
+        for problem in all_problems:
+            print(problem)
         print(f"\n{len(all_problems)} STE problems in {len(args.files)} files")
         return 1
 
