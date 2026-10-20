@@ -29,9 +29,6 @@ jobs:
           unzip -q -d /usr/local/bin /tmp/duckdb.zip
           duckdb --version
 
-      - name: Tests
-        run: python -m pytest tests/ -q
-
       - name: Credential scan
         run: bash scripts/scan_secrets.sh
 
@@ -43,6 +40,12 @@ jobs:
 
       - name: Pipeline runs end to end
         run: ./demo.sh build
+
+      # After the build, never before it. test_gold.py and test_export.py read
+      # the published Parquet and skip when it is missing, so a run before the
+      # build reports green with 56 tests that never ran.
+      - name: Tests
+        run: python -m pytest tests/ -q
 
       - name: Contract reconciles
         run: |

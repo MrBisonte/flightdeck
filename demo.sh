@@ -161,7 +161,8 @@ case "$what" in
   load)    run_load ;;
   export)  run_export ;;
   build)   run_raw; run_typed; run_curated; run_gold; run_publish ;;
-  all)     run_check; run_raw; run_typed; run_curated; run_gold; run_publish; run_load; run_export ;;
+  # check after publish: the gold and export tests read the published Parquet.
+  all)     run_raw; run_typed; run_curated; run_gold; run_publish; run_check; run_load; run_export ;;
   *)       echo "unknown step: $what" >&2; sed -n '2,9p' "$0" >&2; exit 2 ;;
 esac
 
