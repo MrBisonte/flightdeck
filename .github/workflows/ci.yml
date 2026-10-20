@@ -29,23 +29,15 @@ jobs:
           unzip -q -d /usr/local/bin /tmp/duckdb.zip
           duckdb --version
 
-      - name: Credential scan
-        run: bash scripts/scan_secrets.sh
-
-      - name: Docs follow Simplified Technical English
-        run: python scripts/check_ste.py README.md docs/*.md docs/adr/*.md docs/qa/*.md fixtures/SANITIZATION.md fixtures/reference/README.md site/src/*.md
-
-      - name: Fixtures are sanitized
-        run: python scripts/sanitize_flightlog.py --check fixtures/raw
-
       - name: Pipeline runs end to end
         run: ./demo.sh build
 
+      # demo.sh holds the gate list, so CI and a local check cannot drift apart.
       # After the build, never before it. test_gold.py and test_export.py read
       # the published Parquet and skip when it is missing, so a run before the
       # build reports green with 56 tests that never ran.
-      - name: Tests
-        run: python -m pytest tests/ -q
+      - name: Checks and tests
+        run: ./demo.sh check
 
       - name: Contract reconciles
         run: |

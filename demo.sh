@@ -79,10 +79,13 @@ require python "install Python 3.9 or newer"
 
 mkdir -p warehouse/curated
 
+# The one gate list. CI runs this step rather than its own copy of it.
 run_check () {
-  banner "Contract, sanitization gate"
+  banner "Checks: credentials, sanitization, docs, tests"
+  bash scripts/scan_secrets.sh
   python scripts/sanitize_flightlog.py --check fixtures/raw
-  python scripts/check_ste.py README.md docs/*.md fixtures/SANITIZATION.md fixtures/reference/README.md
+  python scripts/check_ste.py README.md docs/*.md docs/adr/*.md docs/qa/*.md \
+    fixtures/SANITIZATION.md fixtures/reference/README.md site/src/*.md
   python -m pytest tests/ -q
   done_in
 }
