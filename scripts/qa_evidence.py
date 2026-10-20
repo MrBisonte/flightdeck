@@ -27,9 +27,9 @@ from __future__ import annotations
 
 import argparse
 import csv
-import importlib.util
 import pathlib
 import re
+import runpy
 import sys
 
 import duckdb
@@ -71,19 +71,17 @@ def postgres_counts() -> dict[str, int]:
     The DSN comes from the loader rather than from a second copy here, so the
     two can never drift apart.
     """
-    path = ROOT / "pipeline" / "30_load_postgres.py"
-    spec = importlib.util.spec_from_file_location("flightdeck_loader", path)
-    loader = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(loader)
+    loader = runpy.run_path(str(ROOT / "pipeline" / "30_load_postgres.py"))
+    dsn, schema = loader["DSN"], loader["SCHEMA"]
 
     con = duckdb.connect()
     try:
-        con.execute(f"ATTACH '{loader.DSN}' AS pg (TYPE POSTGRES, READ_ONLY)")
+        con.execute(f"ATTACH '{dsn}' AS pg (TYPE POSTGRES, READ_ONLY)")
         names = [r[0] for r in con.execute(
             "SELECT table_name FROM pg.information_schema.tables "
-            "WHERE table_schema = ?", [loader.SCHEMA]).fetchall()]
+            "WHERE table_schema = ?", [schema]).fetchall()]
         return {n: con.execute(
-            f'SELECT count(*) FROM pg.{loader.SCHEMA}."{n}"').fetchone()[0]
+            f'SELECT count(*) FROM pg.{schema}."{n}"').fetchone()[0]
             for n in names}
     except Exception as exc:                     # the container is not running
         print(f"  postgres not attached: {exc}", file=sys.stderr)

@@ -13,9 +13,10 @@ The two rules that caught real defects while writing this file:
 These tests read the published Parquet. They skip when it is missing, because
 a checkout without a build has nothing to export.
 """
-import importlib.util
 import pathlib
 import re
+import runpy
+import types
 
 import pytest
 
@@ -28,18 +29,10 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def load_module():
-    """Import the exporter by path. Its name starts with a digit."""
-    path = ROOT / "pipeline" / "40_export.py"
-    spec = importlib.util.spec_from_file_location("flightdeck_export", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 @pytest.fixture(scope="module")
 def export():
-    return load_module()
+    """The exporter, run by path because its name starts with a digit."""
+    return types.SimpleNamespace(**runpy.run_path(str(ROOT / "pipeline" / "40_export.py")))
 
 
 @pytest.fixture(scope="module")
