@@ -1,8 +1,8 @@
 """The export payloads must satisfy the specs they claim to follow.
 
-pipeline/40_export.py emits three wire formats. Two of them are open specs with
-rules a backend enforces on arrival, so the rules belong in a test rather than
-in a comment. The third is a vendor shape kept for comparison.
+pipeline/40_export.py emits two wire formats. Both are open specs with rules a
+backend enforces on arrival, so the rules belong in a test rather than in a
+comment.
 
 The two rules that caught real defects while writing this file:
 
@@ -158,7 +158,6 @@ def test_cloudevent_ids_are_unique(export, con):
     ("otlp", "all", ["otlp-logs", "otlp-traces", "otlp-metrics"]),
     ("otlp", "logs", ["otlp-logs"]),
     ("cloudevents", "all", ["cloudevents"]),
-    ("posthog", "all", ["posthog"]),
 ])
 def test_each_format_builds_the_payloads_it_promises(export, con, fmt, signal, stems):
     payloads, _ = export.build(con, fmt, signal)

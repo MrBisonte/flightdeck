@@ -148,7 +148,7 @@ run_load () {
 }
 
 run_export () {
-  banner "Export, the same files in three wire formats. Dry run"
+  banner "Export, the same files in two wire formats. Dry run"
   python pipeline/40_export.py
   done_in
 }

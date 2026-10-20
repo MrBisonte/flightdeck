@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export curated telemetry in three wire formats. Dry run only.
+"""Export curated telemetry in two wire formats. Dry run only.
 
 The point of this file is to show one curated layer serving many consumers with
 no second pipeline behind it. PostgreSQL gets relational tables from the same
@@ -13,8 +13,6 @@ Formats, in the order a backend usually prefers them:
   otlp         OpenTelemetry OTLP/HTTP with JSON encoding. Signals: logs,
                traces, metrics. Default port 4318, paths /v1/logs, /v1/traces
                and /v1/metrics, Content-Type application/json.
-  posthog      The original vendor capture shape, kept so the "one layer, many
-               consumers" claim has more than one consumer in it.
 
 Both open formats are plain JSON over HTTP, so this file needs no dependency
 beyond the duckdb already in requirements.txt. Protobuf and gRPC are the other
@@ -339,45 +337,6 @@ def build_cloudevents(con: duckdb.DuckDBPyConnection) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# The original vendor capture shape, unchanged in meaning.
-# ---------------------------------------------------------------------------
-def build_posthog(con: duckdb.DuckDBPyConnection) -> list[dict]:
-    events: list[dict] = []
-
-    for row in _rows(con, "session_summary"):
-        events.append({
-            "event": "session_completed",
-            "distinct_id": row["client_id"],
-            "properties": {
-                "duration_s": row["duration_s"], "outcome": row["outcome"],
-                "final_state": row["final_state"], "kills": row["kills"],
-                "hp_first": row["hp_first"], "hp_last": row["hp_last"],
-                "alarm_count": row["alarms"], "error_count": row["errors"],
-                "beat_count": row["beats"], "browser": row["ua"],
-            },
-        })
-
-    for row in _rows(con, "error_report"):
-        events.append({
-            "event": "client_error",
-            "distinct_id": f"{row['session_id']}#{row['page_load_seq']}",
-            "timestamp": row["arrived"].isoformat(),
-            "properties": {"message": row["msg"], "top_frame": row["top_frame"],
-                           "location": row["top_location"]},
-        })
-
-    for row in _rows(con, "alarms_by_class"):
-        events.append({
-            "event": "alarm_summary",
-            "distinct_id": "aggregate",
-            "properties": {"class": row["class"], "count": row["n"],
-                           "page_loads": row["page_loads"]},
-        })
-
-    return events
-
-
-# ---------------------------------------------------------------------------
 # Assembly. One dict per payload: the file stem, the HTTP path, the media type.
 # ---------------------------------------------------------------------------
 def build(con: duckdb.DuckDBPyConnection, fmt: str, signal: str) -> tuple[list[dict], int]:
@@ -398,14 +357,10 @@ def build(con: duckdb.DuckDBPyConnection, fmt: str, signal: str) -> tuple[list[d
             payloads.append({"stem": "otlp-metrics", "path": "/v1/metrics",
                              "media": "application/json",
                              "body": build_otlp_metrics(con)})
-    elif fmt == "cloudevents":
+    else:
         payloads.append({"stem": "cloudevents", "path": "(ingest endpoint)",
                          "media": "application/cloudevents-batch+json",
                          "body": build_cloudevents(con)})
-    else:
-        payloads.append({"stem": "posthog", "path": "/batch/",
-                         "media": "application/json",
-                         "body": build_posthog(con)})
 
     return payloads, collisions
 
@@ -426,7 +381,7 @@ def _count(body: object) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--format", choices=("otlp", "cloudevents", "posthog"),
+    parser.add_argument("--format", choices=("otlp", "cloudevents"),
                         default="otlp", help="wire format (default otlp)")
     parser.add_argument("--signal", choices=("logs", "traces", "metrics", "all"),
                         default="all", help="OTLP signal, ignored otherwise")

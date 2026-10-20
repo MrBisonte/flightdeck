@@ -1,8 +1,9 @@
 -- Publish the curated layer as Parquet.
 --
 -- The load step reads these files, not the DuckDB database. That is deliberate:
--- the same open files feed PostgreSQL, the PostHog exporter, and a Snowflake
--- COPY INTO, with no engine in the middle claiming ownership of the data.
+-- the same open files feed PostgreSQL, the OTLP and CloudEvents exporter, and
+-- a Snowflake COPY INTO, with no engine in the middle claiming ownership of the
+-- data.
 
 -- The publish decision on the origin, and the only place it is taken.
 --

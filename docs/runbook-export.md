@@ -24,12 +24,12 @@ python pipeline/40_export.py --format otlp --out /tmp/payloads
 
 | Flag | Values | Default |
 |---|---|---|
-| `--format` | `otlp`, `cloudevents`, `posthog` | `otlp` |
+| `--format` | `otlp`, `cloudevents` | `otlp` |
 | `--signal` | `logs`, `traces`, `metrics`, `all` | `all` |
 | `--out` | a directory | none, print only |
 | `--limit` | how many records to print per payload | 2 |
 
-`--signal` applies to `otlp` only. The other two formats carry one payload each.
+`--signal` applies to `otlp` only. `cloudevents` carries one payload.
 
 ---
 
@@ -39,7 +39,6 @@ python pipeline/40_export.py --format otlp --out /tmp/payloads
 |---|---|---|---|
 | `cloudevents` | CloudEvents 1.0, JSON batch | `application/cloudevents-batch+json` | whatever the backend documents |
 | `otlp` | OTLP/HTTP, JSON encoding | `application/json` | `/v1/logs`, `/v1/traces`, `/v1/metrics` |
-| `posthog` | vendor capture shape | `application/json` | `/batch/` |
 
 OTLP defaults to port 4318 for HTTP. A backend usually publishes its own host
 and path prefix, so treat the paths above as suffixes.
@@ -58,7 +57,6 @@ and path prefix, so treat the paths above as suffixes.
 | `otlp-traces` | `spans` | 4666 |
 | `otlp-metrics` | `loss_accounting`, `contract_reconciliation`, `alarms_by_class`, `frame_time_by_span` | 8 |
 | `cloudevents` | `session_summary`, `error_report`, `alarms_by_class` | 21 |
-| `posthog` | the same three | 21 |
 
 Record counts come from the three committed fixture sessions. Run
 `./demo.sh build` first, or the exporter exits 1 and says so.
