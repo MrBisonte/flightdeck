@@ -57,7 +57,7 @@ each one uses, so the arrows here carry no notation.
 | 8 | `20_curated.sql` defines eleven views | DuckDB SQL, in process | entities | views | Every business number lives here, and only here |
 | 9 | `22_gold.sql` builds 26 tables and views: dimensions, facts and metric views | DuckDB SQL, in process | entities, reference views | tables | The run grain, which a page load does not give |
 | 10 | `25_publish.sql` copies 34 relations to Parquet | `COPY` to local disk, push | views, tables | `warehouse/curated/*.parquet` | ZSTD compression |
-| 11 | `30_load_postgres.py` loads twelve relations | libpq over TCP 55432, push | Parquet | PostgreSQL | An explicit relation list, no globbing |
+| 11 | `30_load_postgres.py` loads every published relation | libpq over TCP 55432, push | Parquet | PostgreSQL | One table per file in `warehouse/curated` |
 | 12 | `40_export.py` prints payloads in two formats | local file read, then stdout | Parquet | stdout, files | The exporter makes no network call |
 | 13 | The site queries the Parquet in the browser | HTTPS GET, then DuckDB WebAssembly in the tab, pull | Parquet | rendered page | The site holds no query the pipeline holds |
 
