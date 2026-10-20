@@ -9,7 +9,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "scripts"))
 
-from check_ste import MAX_WORDS, check
+from check_ste import check
 
 FRONT_MATTER = """---
 title: Overview
@@ -34,13 +34,13 @@ def write(tmp_path: pathlib.Path, text: str) -> pathlib.Path:
 def test_front_matter_is_not_prose(tmp_path):
     """Five data sources must not read as one long sentence."""
     page = write(tmp_path, FRONT_MATTER + "\nThe page is short and clear.\n")
-    assert check(page, MAX_WORDS) == []
+    assert check(page) == []
 
 
 def test_prose_after_front_matter_is_still_checked(tmp_path):
     """Skipping the front matter must not skip the body behind it."""
     page = write(tmp_path, FRONT_MATTER + "\n" + LONG_SENTENCE + "\n")
-    problems = check(page, MAX_WORDS)
+    problems = check(page)
     assert len(problems) == 1
     assert "30 words" in problems[0]
 
@@ -48,4 +48,4 @@ def test_prose_after_front_matter_is_still_checked(tmp_path):
 def test_leading_rule_without_a_close_keeps_the_body(tmp_path):
     """A document that opens with a rule, and never closes it, stays checked."""
     page = write(tmp_path, "---\n\n" + LONG_SENTENCE + "\n")
-    assert len(check(page, MAX_WORDS)) == 1
+    assert len(check(page)) == 1
