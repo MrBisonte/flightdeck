@@ -24,10 +24,10 @@ from __future__ import annotations
 import csv
 import datetime as dt
 import pathlib
-import shutil
-import subprocess
 
 import pytest
+
+from helpers import copy_tree, require_tools, run_demo
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 REFERENCE = ROOT / "fixtures" / "reference"
@@ -66,27 +66,6 @@ def test_the_committed_file_is_a_readable_history(name):
         for (_, end), (start, _) in zip(versions, versions[1:]):
             assert end is not None and end <= start, member
         assert versions[0][0] < FIRST_FACT, member
-
-
-def run(work: pathlib.Path, *args: str) -> None:
-    done = subprocess.run(
-        ["bash", "./demo.sh", *args],
-        cwd=work, capture_output=True, timeout=600,
-        encoding="utf-8", errors="replace",
-    )
-    assert done.returncode == 0, done.stdout + done.stderr
-
-
-def copy_tree(work: pathlib.Path) -> pathlib.Path:
-    for name in NEEDED:
-        source = ROOT / name
-        target = work / name
-        if source.is_dir():
-            shutil.copytree(source, target)
-        else:
-            shutil.copy2(source, target)
-    (work / "warehouse").mkdir()
-    return work
 
 
 def query(work: pathlib.Path, sql: str) -> list[tuple]:
@@ -137,17 +116,14 @@ def reclassify_talents(work: pathlib.Path, on: str) -> None:
 
 @pytest.fixture(scope="module")
 def tools():
-    if shutil.which("duckdb") is None:
-        pytest.skip("duckdb is not on PATH")
-    if shutil.which("bash") is None:
-        pytest.skip("bash is not on PATH")
+    require_tools()
 
 
 @pytest.fixture(scope="module")
 def baseline(tools, tmp_path_factory):
     """The committed tree, built from an empty warehouse."""
-    work = copy_tree(tmp_path_factory.mktemp("baseline"))
-    run(work, "build")
+    work = copy_tree(tmp_path_factory.mktemp("baseline"), NEEDED)
+    run_demo(work, "build")
     return work
 
 
@@ -155,7 +131,7 @@ def baseline(tools, tmp_path_factory):
 def versioned(tools, tmp_path_factory):
     """Declare a second history in a copy of the tree, then build it. Every
     date here falls after the last fact in the fixtures."""
-    work = copy_tree(tmp_path_factory.mktemp("versioned"))
+    work = copy_tree(tmp_path_factory.mktemp("versioned"), NEEDED)
     reclassify_talents(work, "2026-09-30T00:00:00Z")
 
     chars = work / "fixtures" / "reference" / "characters.csv"
@@ -176,7 +152,7 @@ def versioned(tools, tmp_path_factory):
     bosses.write_text(text.replace(minotaur, minotaur + "2026-09-22T00:00:00Z"),
                       encoding="utf-8")
 
-    run(work, "build")
+    run_demo(work, "build")
     return work
 
 
@@ -247,8 +223,8 @@ def test_a_withdrawn_member_leaves_the_checked_domain(versioned, monkeypatch):
 def test_a_rebuild_from_nothing_reproduces_the_history(baseline, tmp_path_factory):
     """The Pages deploy starts from an empty warehouse every time. Two such
     builds must agree on every version and every date."""
-    again = copy_tree(tmp_path_factory.mktemp("again"))
-    run(again, "build")
+    again = copy_tree(tmp_path_factory.mktemp("again"), NEEDED)
+    run_demo(again, "build")
     builds = [tuple(query(work, sql) for sql in (HISTORY, CAPS, STATES))
               for work in (baseline, again)]
     assert builds[0] == builds[1]
@@ -285,9 +261,9 @@ def test_an_earlier_reclassification_changes_the_runs_after_it(baseline, tmp_pat
     """The same change dated before the first fact reaches every run, and only
     raises play time. Without this the test above could pass on a join that
     ignores versions altogether."""
-    early = copy_tree(tmp_path_factory.mktemp("early"))
+    early = copy_tree(tmp_path_factory.mktemp("early"), NEEDED)
     reclassify_talents(early, "2026-08-29T00:00:00Z")
-    run(early, "build")
+    run_demo(early, "build")
     before = dict(query(baseline, PLAY_TIME))
     after = dict(query(early, PLAY_TIME))
     assert before.keys() == after.keys()

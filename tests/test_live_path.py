@@ -15,13 +15,14 @@ temporary directory, which keeps the repository warehouse out of reach.
 from __future__ import annotations
 
 import contextlib
-import json
 import os
 import pathlib
 import shutil
 import subprocess
 
 import pytest
+
+from helpers import copy_tree, require_tools, run_demo, write_log
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -90,31 +91,12 @@ def capture(first_srv: int, beats: int, origin: str, cid: str) -> list[dict]:
     return records
 
 
-def write_log(path: pathlib.Path, records: list[dict]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="\n") as fh:
-        for rec in records:
-            fh.write(json.dumps(rec) + "\n")
-
-
 @pytest.fixture(scope="module")
 def live_run(tmp_path_factory):
     """Run `demo.sh --live DIR build` once, in an isolated copy of the tree."""
-    if shutil.which("duckdb") is None:
-        pytest.skip("duckdb is not on PATH")
-    if shutil.which("bash") is None:
-        pytest.skip("bash is not on PATH")
-
-    work = tmp_path_factory.mktemp("live")
-    for name in NEEDED:
-        source = ROOT / name
-        target = work / name
-        if source.is_dir():
-            shutil.copytree(source, target)
-        else:
-            shutil.copy2(source, target)
+    require_tools()
+    work = copy_tree(tmp_path_factory.mktemp("live"), NEEDED)
     shutil.copytree(ROOT / "fixtures" / "reference", work / "fixtures" / "reference")
-    (work / "warehouse").mkdir()
 
     source_dir = work / "captures"
     # Two captures, so "newest wins" has something to choose between. The older
@@ -134,12 +116,7 @@ def live_run(tmp_path_factory):
     os.utime(older, (2_000_000, 2_000_000))
     os.utime(newer, (1_000_000, 1_000_000))
 
-    done = subprocess.run(
-        ["bash", "./demo.sh", "--live", str(source_dir), "build"],
-        cwd=work, capture_output=True, timeout=600,
-        encoding="utf-8", errors="replace",
-    )
-    assert done.returncode == 0, done.stdout + done.stderr
+    run_demo(work, "--live", str(source_dir), "build")
     return work
 
 

@@ -7,23 +7,17 @@ be visible rather than silently papered over, which is what
 
 These tests run the real pipeline SQL against small purpose-built logs.
 """
-import json
 import pathlib
 import shutil
 
 import duckdb
 import pytest
 
+from helpers import write_log
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 RAW_SQL = (ROOT / "pipeline" / "00_raw.sql").read_text(encoding="utf-8")
 TYPED_SQL = (ROOT / "pipeline" / "10_typed.sql").read_text(encoding="utf-8")
-
-
-def write_log(path: pathlib.Path, records: list[dict]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="\n") as fh:
-        for rec in records:
-            fh.write(json.dumps(rec) + "\n")
 
 
 def session(with_cid: str | None) -> list[dict]:
