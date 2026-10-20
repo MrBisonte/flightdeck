@@ -84,7 +84,7 @@ run_check () {
   banner "Checks: credentials, sanitization, docs, tests"
   bash scripts/scan_secrets.sh
   python scripts/sanitize_flightlog.py --check fixtures/raw
-  python scripts/check_ste.py README.md docs/*.md docs/adr/*.md docs/qa/*.md \
+  python scripts/check_ste.py README.md ROADMAP.md docs/*.md docs/adr/*.md docs/qa/*.md \
     fixtures/SANITIZATION.md fixtures/reference/README.md site/src/*.md
   python -m pytest tests/ -q
   done_in

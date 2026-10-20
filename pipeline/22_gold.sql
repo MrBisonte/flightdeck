@@ -39,6 +39,9 @@
 -- Every member predates every fact, so a fact can join the version in force at
 -- its own timestamp. The dates live in committed files, so a rebuild from
 -- nothing produces the same history.
+--
+-- An experiment, see ROADMAP.md. No reference row and no cap has a valid_to
+-- yet, so every history below holds one version per member.
 
 --------------------------------------------------------------------------------
 -- Type 1 dimensions. Straight from the second source, overwritten every run.

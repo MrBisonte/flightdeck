@@ -7,7 +7,8 @@ reads exactly what a Snowflake COPY INTO or any other consumer would read.
 If the Docker daemon is not running, the load degrades to a local target with an
 identical schema instead of failing. A live demo should not die because a daemon
 was not started, and the fallback is announced loudly rather than hidden, so
-nobody watching mistakes it for the real thing.
+nobody watching mistakes it for the real thing. The fallback is an experiment,
+see ROADMAP.md.
 """
 from __future__ import annotations
 

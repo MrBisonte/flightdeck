@@ -109,6 +109,7 @@ that throttling does not explain.
 | `docs/runbook-export.md` | Human setup for sending telemetry to a backend |
 | `docs/defect-log.md` | Every defect found while building this, and its fix |
 | `demo.sh` | Every step, one command |
+| `ROADMAP.md` | The experiments and their decision dates |
 
 ## The site
 

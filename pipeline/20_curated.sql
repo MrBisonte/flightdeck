@@ -213,6 +213,9 @@ FROM errors ORDER BY srv;
 -- This is the shape a downstream consumer reads without bespoke glue: the
 -- session, its outcome, and its incidents in a single record. Nothing more is
 -- claimed for it than that.
+--
+-- Prep for a consumer that does not exist yet, see ROADMAP.md. Nothing reads
+-- it today.
 --------------------------------------------------------------------------------
 CREATE OR REPLACE VIEW session_context AS
 SELECT s.client_id,
