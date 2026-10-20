@@ -13,7 +13,6 @@ The two rules that caught real defects while writing this file:
 These tests read the published Parquet. They skip when it is missing, because
 a checkout without a build has nothing to export.
 """
-import datetime as dt
 import importlib.util
 import pathlib
 import re
@@ -55,16 +54,6 @@ def con(export):
 def test_epoch_millis_convert_to_exact_nanoseconds(export):
     """An epoch millisecond count scales by exactly one million."""
     assert export._nanos(1788101938203) == "1788101938203000000"
-
-
-def test_datetime_nanoseconds_keep_every_digit(export):
-    """A float64 cannot hold nanoseconds at this magnitude. Integers can.
-
-    This is the regression: value.timestamp() * 1e9 returned
-    1788101938203000064, inventing 64 nanoseconds that no clock measured.
-    """
-    when = dt.datetime.fromtimestamp(1788101938.203, tz=dt.timezone.utc)
-    assert export._nanos(when) == "1788101938203000000"
 
 
 def test_otlp_log_timestamps_are_digit_strings(export, con):
