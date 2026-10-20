@@ -88,7 +88,7 @@ ORDER BY dimension
 display(Inputs.table(policy, {rows: 8, format: {first_valid_from: utc}, width: WIDTHS}));
 ```
 
-`dim_mode` is absent, and that is a decision rather than an omission. Nothing
+Modes have no dimension, and that is a decision rather than an omission. Nothing
 published names a mode, so a history would hold rows nobody reads. ADR 0002
 carries the argument.
 

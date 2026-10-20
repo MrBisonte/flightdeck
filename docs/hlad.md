@@ -428,7 +428,7 @@ Each candidate key below ran a `count(*)` against a `count(DISTINCT ...)`.
 
 ### 4.3 Slowly changing dimensions
 
-Four gold dimensions, two policies. The split follows one test: did the value
+Four gold dimensions, all Type 2. Each one passes one test: did the value
 decide something that a reader may later need to reproduce?
 
 | Dimension | Type | Why |
@@ -437,7 +437,6 @@ decide something that a reader may later need to reproduce?
 | `dim_boss` | 2 | Same argument. An encounter carries the boss description of its day |
 | `dim_contract_cap` | 2 | A record sits in quarantine because a cap said so. Move the cap and the decision stops being reproducible |
 | `dim_app_state` | 2 | `is_run_state` decides which pulses count as play time. `run_pulse` joins the version in force when each pulse arrived, so a reclassification changes only the runs after it |
-| `dim_mode` | 1 | Nothing published names a mode. A history here would hold rows nobody reads |
 
 `dim_character` and `dim_boss` share one table, `dim_member`, because both hold
 a key and a description. The dimension name is a column. Each keeps its own
@@ -446,6 +445,9 @@ filter. `reference_history` publishes every version of both.
 `app_state_history` publishes every version of a run state, in its own file
 because a state carries two flags and a member carries a description.
 `reference_governance` counts all of them per dimension for the Governance page.
+
+Modes fail the test, so they have no gold dimension. Nothing published names a
+mode, and `ref_modes` serves the contract check.
 
 **What `valid_from` means here.** It is valid time, declared in the file that
 holds the value. A rebuild from an empty warehouse shows the same history. A

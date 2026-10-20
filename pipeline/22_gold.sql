@@ -31,7 +31,8 @@
 -- the pulses whose state advances the clock, so reclassifying a state would
 -- rewrite every past run. Those are Type 2.
 --
--- modes are rebuilt from source, Type 1. Nothing published names a mode.
+-- modes have no dimension table. Nothing published names a mode, and ref_modes
+-- already serves the contract check.
 --
 -- valid_from here is valid time: when the value became true in its own source,
 -- declared in the file that holds it. A member dates from the first crow-archer
@@ -42,12 +43,6 @@
 --
 -- An experiment, see ROADMAP.md. No reference row and no cap has a valid_to
 -- yet, so every history below holds one version per member.
-
---------------------------------------------------------------------------------
--- Type 1 dimensions. Straight from the second source, overwritten every run.
---------------------------------------------------------------------------------
-CREATE OR REPLACE TABLE dim_mode AS
-SELECT mode AS mode_key, note AS description FROM ref_modes;
 
 --------------------------------------------------------------------------------
 -- dim_app_state. Type 2, and the one dimension a fact joins as-of.
